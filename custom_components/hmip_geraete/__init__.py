@@ -1,6 +1,7 @@
 """HmIP Geräteverwaltung: Seitenleisten-Panel zum Erfassen von Homematic-IP-Geräten."""
 from __future__ import annotations
 
+import hashlib
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -34,6 +35,10 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 _STATIC_FLAG = f"{DOMAIN}_static_registered"
+
+
+def _asset_hash(path: Path) -> str:
+    return hashlib.sha1(path.read_bytes()).hexdigest()[:10]
 
 
 class DeviceStore:
@@ -233,11 +238,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[_STATIC_FLAG] = True
 
     integration = await async_get_integration(hass, DOMAIN)
+    # Hash der Panel-Datei in der Adresse, damit Browser und Companion-App nach Updates die neue Datei laden
+    asset = await hass.async_add_executor_job(_asset_hash, Path(__file__).parent / "www" / "panel.js")
     await panel_custom.async_register_panel(
         hass,
         webcomponent_name=PANEL_ELEMENT,
         frontend_url_path=PANEL_URL_PATH,
-        module_url=f"{STATIC_URL}/panel.js?v={integration.version}",
+        module_url=f"{STATIC_URL}/panel.js?v={integration.version}-{asset}",
         sidebar_title="HmIP Geräte",
         sidebar_icon="mdi:barcode-scan",
         require_admin=True,
