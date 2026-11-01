@@ -14,10 +14,30 @@ export function parseCode(raw) {
   return { fmt: "", sgtin: g ? g[0] : "", key: "", raw: String(raw || "").trim() };
 }
 const validSgtin = (s) => /^[0-9A-F]{24}$/.test(norm(s));
-const validKey = (s) => /^[0-9A-F]{32}$/.test(norm(s));
+
+/* Der Geräteschlüssel (128 Bit) steht im QR-Code als 32 Hex-Zeichen und auf dem Aufkleber als Base32 mit
+   eigenem Alphabet (ohne D, I, O, V) in Gruppen 5-5-5-5-6. Geprüft an zwei Original-Aufklebern. */
+const KEY_CHARS = "0123456789ABCEFGHJKLMNPQRSTUWXYZ";
+export function keyToPrinted(hex) {
+  let n = BigInt("0x" + norm(hex)), out = "";
+  for (let i = 25; i >= 0; i--) out += KEY_CHARS[Number((n >> BigInt(5 * i)) & 31n)];
+  return [out.slice(0, 5), out.slice(5, 10), out.slice(10, 15), out.slice(15, 20), out.slice(20)].join("-");
+}
+/* Nimmt 32 Hex-Zeichen oder die gedruckte Schreibweise (26 Zeichen) und liefert 32 Hex-Zeichen, sonst "" */
+export function keyFromInput(input) {
+  const n = norm(input);
+  if (/^[0-9A-F]{32}$/.test(n)) return n;
+  if (n.length === 26 && [...n].every((c) => KEY_CHARS.includes(c))) {
+    let v = 0n;
+    for (const c of n) v = v * 32n + BigInt(KEY_CHARS.indexOf(c));
+    if (v >> 128n === 0n) return v.toString(16).toUpperCase().padStart(32, "0");
+  }
+  return "";
+}
+const validKey = (s) => keyFromInput(s) !== "";
 /* Inhalt des QR-Codes, den die Homematic-IP-App beim Scannen erwartet */
 export function codeContent(d) {
-  if (validSgtin(d.sgtin) && validKey(d.key)) return `${d.fmt || "EQ01"}SG${norm(d.sgtin)}DLK${norm(d.key)}`;
+  if (validSgtin(d.sgtin) && validKey(d.key)) return `${d.fmt || "EQ01"}SG${norm(d.sgtin)}DLK${keyFromInput(d.key)}`;
   return d.raw || "";
 }
 export const hasCode = (d) => !!(validKey(d.key) || d.raw);
@@ -34,15 +54,23 @@ const xml = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 const cut = (s, n) => (String(s || "").length > n ? String(s).slice(0, n - 1) + "…" : String(s || ""));
 const groups = (s) => norm(s).match(/.{1,4}/g) || [];
 
-/* Nachempfunden dem Original-Aufkleber (Hochformat, 50 x 83,5 mm; 1 Einheit = 0,1 mm). Der Geräteschlüssel steckt nur im QR-Code. */
+/* Nachempfunden dem Original-Aufkleber (Hochformat, 50 x 83,5 mm; 1 Einheit = 0,1 mm). Der Schlüssel steht als Text in der
+   gedruckten Schreibweise und steckt zusätzlich im QR-Code. */
 export function stickerSvg(d) {
   const text = codeContent(d);
   if (!text) return "";
   const q = qrMatrix(text);
-  const area = 400, quiet = 4, m = area / (q.n + 2 * quiet), ox = 50, oy = 120;
+  const area = 370, quiet = 4, m = area / (q.n + 2 * quiet), ox = 65, oy = 108;
   let path = "";
   for (let r = 0; r < q.n; r++) for (let c = 0; c < q.n; c++) {
     if (q.dark(r, c)) path += `M${(ox + (c + quiet) * m).toFixed(2)} ${(oy + (r + quiet) * m).toFixed(2)}h${m.toFixed(2)}v${m.toFixed(2)}h${(-m).toFixed(2)}z`;
+  }
+  const mono = 'font-family="Courier New,monospace" font-size="28"';
+  let keyLines = "";
+  if (validKey(d.key)) {
+    const g = keyToPrinted(keyFromInput(d.key)).split("-");
+    keyLines = `<text x="26" y="648" ${mono}>Key:${xml(g.slice(0, 3).join("-"))}-</text>
+  <text x="26" y="684" ${mono}>${xml(g.slice(3).join("-"))}</text>`;
   }
   const g = groups(d.sgtin);
   const line1 = g.slice(0, 3).join("-") + (g.length > 3 ? "-" : "");
@@ -50,19 +78,20 @@ export function stickerSvg(d) {
   const last = rest.length ? rest[rest.length - 1] : "";
   const mid = rest.length > 1 ? rest.slice(0, -1).join("-") + "-" : "";
   const sg = validSgtin(d.sgtin)
-    ? `<text x="30" y="745" font-family="Courier New,monospace" font-size="29">SGTIN:${xml(line1)}</text>
-  <text x="150" y="790" font-family="Courier New,monospace" font-size="29">${xml(mid)}<tspan font-weight="bold" font-size="32">${xml(last)}</tspan></text>`
-    : `<text x="30" y="745" font-family="Courier New,monospace" font-size="26">SGTIN: ${xml(cut(d.sgtin, 24))}</text>`;
+    ? `<text x="26" y="765" ${mono}>SGTIN:${xml(line1)}</text>
+  <text x="127" y="801" ${mono}>${xml(mid)}<tspan font-weight="bold" font-size="31">${xml(last)}</tspan></text>`
+    : `<text x="26" y="765" ${mono}>SGTIN: ${xml(cut(d.sgtin, 22))}</text>`;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 835" width="50mm" height="83.5mm" font-family="Arial,Helvetica,sans-serif">
   <rect x="3" y="3" width="494" height="829" rx="22" fill="#fff" stroke="#9a9a9a" stroke-width="4"/>
-  <text x="250" y="62" text-anchor="middle" font-size="38" fill="#444">QR-Code-Aufkleber</text>
-  <text x="250" y="100" text-anchor="middle" font-size="21" font-weight="bold" text-decoration="underline" fill="#000">Aufkleber sorgfältig aufbewahren!</text>
+  <text x="250" y="58" text-anchor="middle" font-size="38" fill="#444">QR-Code-Aufkleber</text>
+  <text x="250" y="92" text-anchor="middle" font-size="21" font-weight="bold" text-decoration="underline" fill="#000">Aufkleber sorgfältig aufbewahren!</text>
   <rect x="${ox}" y="${oy}" width="${area}" height="${area}" fill="#fff"/>
   <path d="${path}" fill="#000" shape-rendering="crispEdges"/>
-  <text x="30" y="580" font-size="34" font-weight="bold" fill="#000">${xml(cut(d.type, 20))}</text>
-  <text x="30" y="624" font-size="28" fill="#000">${xml(cut(d.name, 24))}</text>
-  <text x="30" y="660" font-size="25" fill="#555">${xml(cut([d.room, d.loc].filter(Boolean).join(" · "), 28))}</text>
-  <line x1="30" y1="688" x2="470" y2="688" stroke="#000" stroke-width="3"/>
+  <text x="26" y="530" font-size="32" font-weight="bold" fill="#000">${xml(cut(d.type, 22))}</text>
+  <text x="26" y="566" font-size="25" fill="#000">${xml(cut(d.name, 28))}</text>
+  <text x="26" y="598" font-size="22" fill="#555">${xml(cut([d.room, d.loc].filter(Boolean).join(" · "), 32))}</text>
+  ${keyLines}
+  <line x1="26" y1="712" x2="474" y2="712" stroke="#000" stroke-width="3"/>
   ${sg}
 </svg>`;
 }
@@ -181,7 +210,7 @@ small{color:var(--mut)}
     <div><label>SGTIN / Gerätenummer</label><input id="eSgtin" autocapitalize="characters" spellcheck="false"></div>
     <div><label>Letzte 4 Ziffern</label><input id="eLast4" readonly></div>
   </div>
-  <div><label>Geräteschlüssel (geheim, 32 Zeichen, aus dem QR-Code)</label>
+  <div><label>Geräteschlüssel (geheim; 32 Hex-Zeichen oder gedruckte Schreibweise)</label>
     <div class="row"><input id="eKey" type="password" autocomplete="off" spellcheck="false" autocapitalize="characters"><button type="button" class="ghost fix" id="eKeyShow">anzeigen</button></div></div>
   <div id="eRawWrap" hidden><label>Scan-Inhalt (Format unbekannt, unverändert gespeichert)</label><textarea id="eRaw" rows="2" readonly></textarea></div>
   <div class="row">
@@ -204,7 +233,7 @@ small{color:var(--mut)}
         <button type="button" class="ghost" id="eStSvg">SVG</button>
         <button type="button" class="ghost" id="eStPrint">Drucken</button>
       </div>
-      <small>Der QR-Code enthält SGTIN und Geräteschlüssel und lässt sich mit der Homematic-IP-App scannen. Den Schlüssel als Text druckt der Aufkleber nicht.</small>
+      <small>Der QR-Code enthält SGTIN und Geräteschlüssel und lässt sich mit der Homematic-IP-App scannen. Der Schlüssel steht auch als Text im Aufkleber, so wie beim Original.</small>
     </div>
   </div>
   <div class="row">
@@ -380,7 +409,7 @@ function init(host) {
   }
 
   function draft() {
-    return { sgtin: norm($("eSgtin").value), key: norm($("eKey").value), fmt: cur ? cur.fmt : "", raw: cur ? cur.raw : "",
+    return { sgtin: norm($("eSgtin").value), key: keyFromInput($("eKey").value) || norm($("eKey").value), fmt: cur ? cur.fmt : "", raw: cur ? cur.raw : "",
       name: $("eName").value.trim(), type: $("eType").value.trim(), room: $("eRoom").value.trim(), loc: $("eLoc").value.trim() };
   }
   function updateSticker() {
@@ -409,11 +438,11 @@ function init(host) {
     let h = "";
     if (extra) h += `<div class="msg warn">${esc(extra)}</div>`;
     if (cur) {
-      const sg = norm($("eSgtin").value), k = norm($("eKey").value);
+      const sg = norm($("eSgtin").value), k = norm($("eKey").value), kOk = keyFromInput($("eKey").value);
       const dup = findDup(sg, cur.raw, cur.id);
       if (dup) h += `<div class="msg warn">Achtung: Diese SGTIN ist schon erfasst als „${esc(dup.name || dup.type || "ohne Name")}“ (${esc(dup.room || "ohne Raum")}).</div>`;
       if (sg && !validSgtin(sg)) h += `<div class="msg warn">Eine SGTIN hat 24 Zeichen (0–9, A–F). Hier sind es ${sg.length}.</div>`;
-      if (k && !validKey(k)) h += `<div class="msg warn">Der Geräteschlüssel hat 32 Zeichen (0–9, A–F). Hier sind es ${k.length}. Er wird so nicht gespeichert.</div>`;
+      if (k && !kOk) h += `<div class="msg warn">Der Geräteschlüssel besteht aus 32 Zeichen (0–9, A–F) oder aus 26 Zeichen in der gedruckten Schreibweise (XXXXX-XXXXX-XXXXX-XXXXX-XXXXXX). Hier sind es ${k.length}. Er wird so nicht gespeichert.</div>`;
     }
     $("eMsg").innerHTML = h;
   }
@@ -432,8 +461,8 @@ function init(host) {
 
   $("fEdit").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const k = norm($("eKey").value);
-    if (k && !validKey(k)) { alert("Der Geräteschlüssel muss aus genau 32 Zeichen (0–9, A–F) bestehen."); return; }
+    const k = keyFromInput($("eKey").value);
+    if (norm($("eKey").value) && !k) { alert("Der Geräteschlüssel muss aus 32 Zeichen (0–9, A–F) oder aus 26 Zeichen in der gedruckten Schreibweise bestehen."); return; }
     Object.assign(cur, { sgtin: norm($("eSgtin").value), key: k, name: $("eName").value.trim(), type: $("eType").value.trim(),
       room: $("eRoom").value.trim(), loc: $("eLoc").value.trim(), note: $("eNote").value.trim(), fw: $("eFw").value.trim(), updated: new Date().toISOString() });
     if (k && !cur.fmt) cur.fmt = "EQ01";
