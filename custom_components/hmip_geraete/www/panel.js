@@ -147,71 +147,96 @@ export function sheetHtml(devices) {
 <div class="grid">${items}</div></body></html>`;
 }
 
+/* Mulish (SIL Open Font License, siehe fonts/OFL-Mulish.txt): freie Schrift, die der Schrift der Homematic-IP-App ähnelt */
+(function loadFonts() {
+  if (typeof document === "undefined" || document.getElementById("hmip-geraete-fonts")) return;
+  const u = (f) => new URL("./fonts/" + f, import.meta.url).href;
+  const st = document.createElement("style");
+  st.id = "hmip-geraete-fonts";
+  st.textContent = `@font-face{font-family:"Mulish";font-weight:400;font-style:normal;font-display:swap;src:url(${u("mulish-latin-400-normal.woff2")}) format("woff2")}
+@font-face{font-family:"Mulish";font-weight:700;font-style:normal;font-display:swap;src:url(${u("mulish-latin-700-normal.woff2")}) format("woff2")}`;
+  document.head.appendChild(st);
+})();
+
+const ICON = {
+  scan: '<svg viewBox="0 0 24 24"><path d="M4 8.5h3l1.8-2.5h6.4L17 8.5h3v10.5H4z"/><circle cx="12" cy="13.5" r="3.4"/></svg>',
+  photo: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2.2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17.5l5-4 4 3 3-2 4 3"/></svg>',
+  manual: '<svg viewBox="0 0 24 24"><path d="M4 20l1-4.2L16.3 4.5l3.2 3.2L8.2 19z"/><path d="M14 6.8l3.2 3.2"/></svg>',
+  menu: '<svg viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18.5" cy="12" r="1.5"/></svg>',
+};
+
 const TEMPLATE = `
 <style>
 :host{display:block;height:100%;overflow:auto;box-sizing:border-box;
-  --bg:var(--primary-background-color,#f4f6f9);--card:var(--card-background-color,#fff);
-  --ink:var(--primary-text-color,#1b2430);--mut:var(--secondary-text-color,#667085);
-  --pri:var(--primary-color,#0b5cab);--onpri:var(--text-primary-color,#fff);
-  --line:var(--divider-color,#dde2ea);--bad:var(--error-color,#b42318);
-  background:var(--bg);color:var(--ink);font:16px/1.4 var(--paper-font-body1_-_font-family,system-ui,sans-serif)}
+  --cyan:#01B7CD;--navy:#0E324C;--grey:#4F5054;--bg:#F3F2F7;--mut:#667180;--line:#E1E6EA;--bad:#C62828;
+  background:var(--bg);color:var(--navy);font:400 16px/1.4 Mulish,"Segoe UI",system-ui,sans-serif;-webkit-text-size-adjust:100%}
 *{box-sizing:border-box}
-header{position:sticky;top:0;z-index:5;background:var(--app-header-background-color,var(--pri));
-  color:var(--app-header-text-color,var(--onpri));padding:10px 12px}
-header .top{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-header h1{margin:0;font-size:18px;font-weight:500}
-.bar{display:flex;gap:8px;flex-wrap:wrap}
-button{font:inherit;display:inline-flex;align-items:center;justify-content:center;text-align:center;line-height:1.2;min-width:0;
-  border:0;border-radius:10px;padding:11px 14px;background:#fff;color:#0b5cab;font-weight:600;cursor:pointer;overflow-wrap:anywhere;-webkit-tap-highlight-color:transparent}
-header button.burger{background:transparent;color:inherit;padding:4px 8px;font-size:22px;line-height:1}
-button.pri{background:var(--pri);color:var(--onpri)}
+header{position:sticky;top:0;z-index:5;background:var(--navy);color:#fff;padding:10px 12px 14px;border-radius:0 0 22px 22px;box-shadow:0 2px 8px rgba(14,50,76,.35)}
+header .top{display:flex;align-items:center;gap:8px;min-height:40px}
+header .title{flex:1;text-align:center;min-width:0}
+header h1{margin:0;font-size:22px;line-height:1.2;font-weight:700;letter-spacing:.2px}
+#count{font-size:13px;opacity:.85;font-weight:400}
+header .spacer{width:36px;flex:none}
+button{font:inherit;font-weight:700;display:inline-flex;align-items:center;justify-content:center;text-align:center;line-height:1.2;min-width:0;
+  border:0;border-radius:14px;padding:12px 14px;background:#fff;color:var(--navy);cursor:pointer;overflow-wrap:anywhere;-webkit-tap-highlight-color:transparent}
+header button.burger{background:transparent;color:#fff;padding:4px 6px;font-size:24px;line-height:1;width:36px;flex:none}
+.tiles{display:flex;gap:10px;margin-top:10px}
+.tile{flex:1 1 0;flex-direction:column;gap:3px;padding:9px 4px 7px;background:var(--cyan);color:#fff;border:3px solid #fff;border-radius:20px;font-size:12px;letter-spacing:.2px}
+.tile svg{width:26px;height:26px;stroke:#fff;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.tile svg circle[r="1.5"]{fill:#fff}
+button.pri{background:var(--navy);color:#fff}
 button.bad{background:var(--bad);color:#fff}
-button.ghost{background:transparent;color:var(--pri);border:1px solid var(--line)}
+button.ghost{background:#fff;color:var(--navy);border:2px solid var(--cyan)}
 button:disabled{opacity:.5}
-main{padding:12px;max-width:900px;margin:0 auto}
-.tools{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
-input,select,textarea{font:inherit;width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
-.tools input{flex:2;min-width:160px}.tools select{flex:1;min-width:120px}
-.item{background:var(--card);border-radius:12px;padding:10px 12px;margin-bottom:8px;display:flex;gap:10px;align-items:center;
-  box-shadow:0 1px 2px #0002;cursor:pointer}
-.ico{width:48px;height:48px;border-radius:10px;flex:none;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;letter-spacing:.5px}
-.ico.ok{background:color-mix(in srgb,#22a559 28%,transparent)}.ico.miss{background:color-mix(in srgb,#f59e0b 28%,transparent)}
-.item .t{font-weight:600}.item .s{color:var(--mut);font-size:14px;word-break:break-all}
-.tag{display:inline-block;background:color-mix(in srgb,var(--pri) 18%,transparent);color:var(--pri);border-radius:6px;padding:1px 7px;font-size:12px;margin-right:4px}
-.tag.miss{background:color-mix(in srgb,#f59e0b 25%,transparent);color:inherit}.tag.ok{background:color-mix(in srgb,#22a559 25%,transparent);color:inherit}
+button:focus-visible{outline:3px solid var(--cyan);outline-offset:2px}
+main{padding:14px 12px 28px;max-width:900px;margin:0 auto}
+.tools{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+input,select,textarea{font:inherit;color:var(--navy);width:100%;padding:12px 14px;background:var(--bg);border:1px solid var(--line);border-radius:14px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--cyan);outline-offset:0;background:#fff}
+.tools input,.tools select{background:#fff}
+.tools input{flex:2 1 160px}.tools select{flex:1 1 140px}
+.item{background:#fff;border-radius:20px;padding:12px 14px;margin-bottom:10px;display:flex;gap:12px;align-items:center;box-shadow:0 1px 3px rgba(14,50,76,.12);cursor:pointer}
+.ico{width:46px;height:46px;border-radius:14px;flex:none;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
+.ico.ok{background:var(--cyan);color:#fff;border:3px solid #fff;box-shadow:0 0 0 1px rgba(1,183,205,.55)}
+.ico.miss{background:#E9EDF1;color:#8A93A0}
+.item .main{min-width:0;flex:1}
+.item .t{font-weight:700;color:var(--navy)}
+.item .s{color:var(--mut);font-size:14px;word-break:break-word}
+.chev{color:#C3CBD2;font-size:28px;line-height:1;flex:none}
+.pill{display:inline-block;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700;margin:3px 4px 0 0}
+.pill.ok{background:var(--navy);color:#fff}.pill.miss{background:#E9EDF1;color:var(--grey)}.pill.room{background:#DDF4F7;color:var(--navy)}
 .empty{text-align:center;color:var(--mut);padding:40px 10px}
-dialog{border:0;border-radius:14px;padding:0;width:min(94vw,560px);max-height:92vh;overflow-y:auto;overscroll-behavior:contain;background:var(--card);color:var(--ink)}
-dialog::backdrop{background:#0008}
-.dlg{padding:14px 14px 10px;display:flex;flex-direction:column;gap:12px}
-header h1{line-height:1.2}#count{font-size:13px;opacity:.9;font-weight:400}
-.dlg h2{margin:0;font-size:18px;font-weight:500}
-label{font-size:13px;color:var(--mut);display:block;margin-bottom:3px}
+dialog{border:0;border-radius:24px;padding:0;width:min(94vw,560px);max-height:92vh;overflow-y:auto;overscroll-behavior:contain;background:#fff;color:var(--navy)}
+dialog::backdrop{background:rgba(14,50,76,.55)}
+.dlg{padding:16px 16px 10px;display:flex;flex-direction:column;gap:12px}
+.dlg h2{margin:0;font-size:22px;font-weight:700;color:var(--navy)}
+label{font-size:13px;color:var(--grey);font-weight:700;display:block;margin-bottom:4px}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}.row>*{flex:1 1 220px;min-width:0}
 .keyrow{display:flex;gap:8px}.keyrow input{flex:1;min-width:0}.keyrow button{flex:none}
-.actions{display:flex;flex-wrap:wrap;gap:8px;position:sticky;bottom:0;background:var(--card);padding:10px 0 2px;border-top:1px solid var(--line);margin-top:4px}
-.actions button{flex:1 1 auto;padding:12px 10px}
+.actions{display:flex;flex-wrap:wrap;gap:8px;position:sticky;bottom:0;background:#fff;padding:10px 0 4px;border-top:1px solid var(--line);margin-top:4px}
+.actions button{flex:1 1 auto;padding:13px 10px}
 .btns{display:flex;flex-wrap:wrap;gap:8px}.btns button{flex:1 1 auto}
-video{width:100%;border-radius:10px;background:#000;max-height:55vh}
-.msg{padding:8px 10px;border-radius:8px;font-size:14px}
-.msg.warn{background:color-mix(in srgb,#f59e0b 22%,transparent)}
-.msg.ok{background:color-mix(in srgb,#22a559 22%,transparent)}
-#eSticker{background:#fff;border-radius:10px;padding:6px;align-self:flex-start}#eSticker svg{display:block;width:190px;height:auto}
-.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1b2430;color:#fff;padding:10px 16px;border-radius:10px;z-index:99;display:none}
+video{width:100%;border-radius:16px;background:#000;max-height:55vh}
+.msg{padding:10px 12px;border-radius:14px;font-size:14px}
+.msg.warn{background:#FFF3D6;color:#5B4200}
+.msg.ok{background:#DDF4F7;color:var(--navy)}
+#eSticker{background:#fff;border-radius:12px;padding:6px;align-self:flex-start;border:1px solid var(--line)}#eSticker svg{display:block;width:190px;height:auto}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--navy);color:#fff;padding:11px 18px;border-radius:999px;z-index:99;display:none;font-weight:700;max-width:92vw;text-align:center}
 small{color:var(--mut)}
 </style>
 <header>
   <div class="top"><button class="burger" id="bBurger" style="display:none" aria-label="Menü">☰</button>
-    <div><h1>HmIP Geräte</h1><div id="count"></div></div></div>
-  <div class="bar">
-    <button id="bScan">📷 Scannen</button>
-    <button id="bPhoto">🖼️ Foto</button>
-    <button id="bManual">✍️ Manuell</button>
-    <button id="bMenu">⋯</button>
+    <div class="title"><h1>HmIP Geräte</h1><div id="count"></div></div><span class="spacer"></span></div>
+  <div class="tiles">
+    <button class="tile" id="bScan">${ICON.scan}<span>Scannen</span></button>
+    <button class="tile" id="bPhoto">${ICON.photo}<span>Foto</span></button>
+    <button class="tile" id="bManual">${ICON.manual}<span>Manuell</span></button>
+    <button class="tile" id="bMenu">${ICON.menu}<span>Menü</span></button>
   </div>
 </header>
 <main>
   <div class="tools">
-    <input id="q" type="search" placeholder="Suchen (Name, Raum, SGTIN …)">
+    <input id="q" type="search" placeholder="Suchen …">
     <select id="fRoom"><option value="">Alle Räume</option></select>
     <select id="fStatus"><option value="">Alle Geräte</option><option value="missing">QR-Code-Aufkleber fehlt</option><option value="done">QR-Code-Aufkleber erfasst</option></select>
   </div>
@@ -422,12 +447,12 @@ function init(host) {
       const ok = hasCode(d);
       return `
       <div class="item" data-id="${esc(d.id)}">
-        <div class="ico ${ok ? "ok" : "miss"}">${ok ? "QR ✓" : "QR –"}</div>
-        <div style="min-width:0">
+        <div class="ico ${ok ? "ok" : "miss"}">${ok ? "QR ✓" : "QR"}</div>
+        <div class="main">
           <div class="t">${esc(d.name || d.type || "(ohne Name)")}</div>
-          <div class="s"><span class="tag ${ok ? "ok" : "miss"}">${ok ? "QR-Code-Aufkleber erfasst" : "QR-Code-Aufkleber fehlt"}</span>${d.room ? `<span class="tag">${esc(d.room)}</span>` : ""}${esc(d.loc)}</div>
           <div class="s">${esc(d.type)}${d.type && d.sgtin ? " · " : ""}${d.sgtin ? "SGTIN …" + esc(last4(d.sgtin)) : ""}${d.fw ? " · FW " + esc(d.fw) : ""}</div>
-        </div></div>`;
+          <div><span class="pill ${ok ? "ok" : "miss"}">${ok ? "QR-Code-Aufkleber erfasst" : "QR-Code-Aufkleber fehlt"}</span>${d.room ? `<span class="pill room">${esc(d.room)}</span>` : ""}${d.loc ? `<span class="s">${esc(d.loc)}</span>` : ""}</div>
+        </div><span class="chev">›</span></div>`;
     }).join("") :
       `<div class="empty">${devices.length ? "Keine Treffer." : "Noch keine Geräte.<br>Öffne das Menü (⋯) und übernimm die Geräte aus Home Assistant, oder tippe auf „Scannen“."}</div>`;
   }

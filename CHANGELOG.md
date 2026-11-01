@@ -1,5 +1,9 @@
 # Änderungsprotokoll
 
+## 1.4.0
+- Neues Aussehen nach dem Vorbild der Homematic-IP-App: dunkelblaue Kopfzeile mit Kacheln in Cyan, Karten mit runden Ecken, Schrift Mulish (freie Schrift, ähnlich der App).
+- Druckbogen: Der Stil des Bogens war versehentlich verloren gegangen und ist wiederhergestellt.
+
 ## 1.3.1
 - Aufkleber: Lange Gerätenamen, Typen und Räume werden umbrochen statt abgeschnitten, die Höhe passt sich an.
 - Formular für Smartphones überarbeitet: Felder stehen untereinander und sind gleich breit, nichts wird abgeschnitten, auch nicht bei großer Systemschrift; Speichern/Abbrechen/Löschen bleiben unten sichtbar und zentriert, die Kopfzeile bricht nicht mehr um.

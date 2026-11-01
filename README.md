@@ -4,6 +4,8 @@ Seitenleisten-Panel zum Erfassen und Verwalten von Homematic-IP-Geräten: **QR-C
 
 ## Funktionen
 
+Das Aussehen orientiert sich an der Homematic-IP-App (Farben aus App-Screenshots gemessen: Cyan `#01B7CD`, Dunkelblau `#0E324C`, Hellgrau `#F3F2F7`). Das Panel nutzt immer diese helle Darstellung und folgt nicht dem Design von Home Assistant. Es ist keine offizielle Anwendung von eQ-3.
+
 - **Scannen** mit der Live-Kamera (Chrome auf Android, Browser mit `BarcodeDetector`); **Foto** als Alternative (das Foto wird nur ausgewertet, nicht gespeichert); **Manuell** als Notlösung
 - **Übernahme aus Home Assistant:** Menü „Geräte aus Home Assistant übernehmen“ legt alle eQ-3-Geräte mit 24-stelliger Seriennummer (SGTIN-Format) mit Name, Typ, Raum und Firmware an. Eigene Eingaben bleiben beim erneuten Import erhalten, die Firmware wird nachgeführt
 - **Abgleich:** Ein gescannter QR-Code-Aufkleber wird dem Gerät mit passender SGTIN zugeordnet (Zähler „QR-Code-Aufkleber x/y“, Filter „QR-Code-Aufkleber fehlt“)
@@ -45,5 +47,7 @@ pytest
 ```
 
 ## Drittsoftware
+
+Schrift [Mulish](https://github.com/googlefonts/mulish) (SIL Open Font License 1.1, Dateien in `custom_components/hmip_geraete/www/fonts/`, Lizenztext `OFL-Mulish.txt`). Sie ähnelt der Schrift der Homematic-IP-App, ist aber nicht dieselbe.
 
 QR-Codes erzeugt [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) von Kazuhiko Arase (MIT-Lizenz, Datei `custom_components/hmip_geraete/www/qrcode.mjs`). „QR Code“ ist eine eingetragene Marke von DENSO WAVE INCORPORATED.
