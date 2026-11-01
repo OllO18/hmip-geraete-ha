@@ -1,5 +1,11 @@
 # Änderungsprotokoll
 
+## 1.6.0
+- Filter: mehrere Räume (auch „ohne Raum“) und Gerätetypen gleichzeitig, dazu Status des QR-Code-Aufklebers und Suche.
+- Handauswahl: „Auswählen“ und Geräte antippen; die Bögen enthalten dann nur die ausgewählten Geräte.
+- Dokumentationsbogen und Aufkleber-PDF folgen Filter bzw. Auswahl; die verwendete Auswahl steht auf dem Bogen unter „Notizen“.
+- Sortierung: Geräte ohne Raum stehen am Ende.
+
 ## 1.5.1
 - Scannen funktioniert jetzt auch in Browsern ohne eingebaute Barcode-Erkennung (z. B. Firefox, Safari): QR-Codes werden dann mit der Bibliothek jsQR (Apache-2.0) gelesen, live und per Foto.
 
