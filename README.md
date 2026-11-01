@@ -9,7 +9,7 @@ Das Aussehen orientiert sich an der Homematic-IP-App (Farben aus App-Screenshots
 - **Scannen** mit der Live-Kamera (Chrome auf Android, Browser mit `BarcodeDetector`); **Foto** als Alternative (das Foto wird nur ausgewertet, nicht gespeichert); **Manuell** als Notlösung
 - **Übernahme aus Home Assistant:** Menü „Geräte aus Home Assistant übernehmen“ legt alle eQ-3-Geräte mit 24-stelliger Seriennummer (SGTIN-Format) mit Name, Typ, Raum und Firmware an. Eigene Eingaben bleiben beim erneuten Import erhalten, die Firmware wird nachgeführt
 - **Abgleich:** Ein gescannter QR-Code-Aufkleber wird dem Gerät mit passender SGTIN zugeordnet (Zähler „QR-Code-Aufkleber x/y“, Filter „QR-Code-Aufkleber fehlt“)
-- **QR-Code-Aufkleber erzeugen:** Aus den gespeicherten Daten (SGTIN und Geräteschlüssel) entsteht ein Aufkleber im Stil des Originals mit QR-Code, Typ, Name, Raum, Schlüsselzeile und SGTIN. Als PNG oder SVG speichern oder drucken, einzeln oder als Bogen (9 je A4-Seite). Der Aufkleber wird jedes Mal neu gezeichnet, es wird kein Bild gespeichert
+- **QR-Code-Aufkleber erzeugen:** Aus den gespeicherten Daten (SGTIN und Geräteschlüssel) entsteht ein Aufkleber im Stil des Originals mit QR-Code, Typ, Schlüsselzeile und SGTIN (Name und Raum stehen auf dem Dokumentationsbogen, den es ebenfalls als PDF gibt). Als PNG oder SVG speichern oder drucken, einzeln oder als Bogen (9 je A4-Seite). Der Aufkleber wird jedes Mal neu gezeichnet, es wird kein Bild gespeichert
 - Suche, Raumfilter, Warnung bei doppelter SGTIN
 - Export: **CSV** für Excel (Semikolon, ohne Geräteschlüssel) und **JSON-Backup** (mit Geräteschlüsseln); Import von Backups
 - Daten liegen in Home Assistant (`.storage`), sind in dessen Backups enthalten und auf allen Geräten gleich

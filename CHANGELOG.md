@@ -1,5 +1,10 @@
 # Änderungsprotokoll
 
+## 1.5.0
+- Neu: Dokumentationsbogen nach dem Vorbild des Homematic-IP-Vordrucks (A4, 6 Geräte je Seite) mit Gerätename, Raum/Montageort, Sonstiges und dem QR-Code-Aufkleber. Als PDF erzeugbar (Smartphone: teilen/speichern, dann drucken) oder direkt am PC drucken.
+- Der Aufkleber enthält Name und Einbauort nicht mehr (sie stehen auf dem Bogen). Aufkleber-Bogen ebenfalls als PDF.
+- Liste: Das Häkchen im QR-Symbol sitzt jetzt mittig (eigenes Symbol statt Textzeichen). Kachel "Scannen" bricht nicht mehr um.
+
 ## 1.4.0
 - Neues Aussehen nach dem Vorbild der Homematic-IP-App: dunkelblaue Kopfzeile mit Kacheln in Cyan, Karten mit runden Ecken, Schrift Mulish (freie Schrift, ähnlich der App).
 - Druckbogen: Der Stil des Bogens war versehentlich verloren gegangen und ist wiederhergestellt.
