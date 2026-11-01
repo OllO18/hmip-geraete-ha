@@ -1,5 +1,9 @@
 # Änderungsprotokoll
 
+## 1.7.0
+- Aufkleber auch ohne erfassten Key: Der QR-Code enthält dann nur die SGTIN, der Aufkleber ist mit „Ohne Key – nur Online-Anlernen“ gekennzeichnet. Laut Homematic-IP-Anwenderhandbuch (5.3.6.1) genügen für das normale Anlernen die letzten vier Ziffern der SGTIN; für das Offline-Anlernen an der HCU (5.3.6.2) wird der Original-Key gebraucht. Ob die Homematic-IP-App einen QR-Code nur mit SGTIN annimmt, ist nicht dokumentiert.
+- Der Dokumentationsbogen zeigt damit für alle Geräte mit SGTIN einen Aufkleber.
+
 ## 1.6.0
 - Filter: mehrere Räume (auch „ohne Raum“) und Gerätetypen gleichzeitig, dazu Status des QR-Code-Aufklebers und Suche.
 - Handauswahl: „Auswählen“ und Geräte antippen; die Bögen enthalten dann nur die ausgewählten Geräte.
