@@ -51,11 +51,23 @@ export function qrMatrix(text) {
   return { n: qr.getModuleCount(), dark: (r, c) => qr.isDark(r, c) };
 }
 const xml = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+function wrap(text, max, maxLines) {
+  const words = String(text || "").split(/\s+/).filter(Boolean), lines = [];
+  let line = "";
+  for (let w of words) {
+    while (w.length > max) { if (line) { lines.push(line); line = ""; } lines.push(w.slice(0, max)); w = w.slice(max); }
+    if ((line ? line + " " : "").length + w.length <= max) line = (line ? line + " " : "") + w;
+    else { lines.push(line); line = w; }
+  }
+  if (line) lines.push(line);
+  if (lines.length > maxLines) { lines.length = maxLines; lines[maxLines - 1] = lines[maxLines - 1].replace(/\s*$/, "") + "…"; }
+  return lines;
+}
 const cut = (s, n) => (String(s || "").length > n ? String(s).slice(0, n - 1) + "…" : String(s || ""));
 const groups = (s) => norm(s).match(/.{1,4}/g) || [];
 
-/* Nachempfunden dem Original-Aufkleber (Hochformat, 50 x 83,5 mm; 1 Einheit = 0,1 mm). Der Schlüssel steht als Text in der
-   gedruckten Schreibweise und steckt zusätzlich im QR-Code. */
+/* Nachempfunden dem Original-Aufkleber (Hochformat, Breite 50 mm; 1 Einheit = 0,1 mm). Lange Texte werden umbrochen, die Höhe passt
+   sich an. Der Schlüssel steht als Text in der gedruckten Schreibweise und steckt zusätzlich im QR-Code. */
 export function stickerSvg(d) {
   const text = codeContent(d);
   if (!text) return "";
@@ -66,33 +78,40 @@ export function stickerSvg(d) {
     if (q.dark(r, c)) path += `M${(ox + (c + quiet) * m).toFixed(2)} ${(oy + (r + quiet) * m).toFixed(2)}h${m.toFixed(2)}v${m.toFixed(2)}h${(-m).toFixed(2)}z`;
   }
   const mono = 'font-family="Courier New,monospace" font-size="28"';
-  let keyLines = "";
+  let y = 520, body = "";
+  for (const l of wrap(d.type, 20, 2)) { y += 36; body += `<text x="26" y="${y}" font-size="32" font-weight="bold" fill="#000">${xml(l)}</text>`; }
+  for (const l of wrap(d.name, 30, 3)) { y += 31; body += `<text x="26" y="${y}" font-size="25" fill="#000">${xml(l)}</text>`; }
+  for (const l of wrap([d.room, d.loc].filter(Boolean).join(" · "), 34, 2)) { y += 28; body += `<text x="26" y="${y}" font-size="22" fill="#555">${xml(l)}</text>`; }
+  y += 14;
   if (validKey(d.key)) {
     const g = keyToPrinted(keyFromInput(d.key)).split("-");
-    keyLines = `<text x="26" y="648" ${mono}>Key:${xml(g.slice(0, 3).join("-"))}-</text>
-  <text x="26" y="684" ${mono}>${xml(g.slice(3).join("-"))}</text>`;
+    body += `<text x="26" y="${y + 38}" ${mono}>Key:${xml(g.slice(0, 3).join("-"))}-</text>
+  <text x="26" y="${y + 74}" ${mono}>${xml(g.slice(3).join("-"))}</text>`;
+    y += 92;
   }
+  y += 8;
+  body += `<line x1="26" y1="${y}" x2="474" y2="${y}" stroke="#000" stroke-width="3"/>`;
   const g = groups(d.sgtin);
-  const line1 = g.slice(0, 3).join("-") + (g.length > 3 ? "-" : "");
-  const rest = g.slice(3);
-  const last = rest.length ? rest[rest.length - 1] : "";
-  const mid = rest.length > 1 ? rest.slice(0, -1).join("-") + "-" : "";
-  const sg = validSgtin(d.sgtin)
-    ? `<text x="26" y="765" ${mono}>SGTIN:${xml(line1)}</text>
-  <text x="127" y="801" ${mono}>${xml(mid)}<tspan font-weight="bold" font-size="31">${xml(last)}</tspan></text>`
-    : `<text x="26" y="765" ${mono}>SGTIN: ${xml(cut(d.sgtin, 22))}</text>`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 835" width="50mm" height="83.5mm" font-family="Arial,Helvetica,sans-serif">
-  <rect x="3" y="3" width="494" height="829" rx="22" fill="#fff" stroke="#9a9a9a" stroke-width="4"/>
+  if (validSgtin(d.sgtin)) {
+    const line1 = g.slice(0, 3).join("-") + (g.length > 3 ? "-" : "");
+    const rest = g.slice(3);
+    const last = rest.length ? rest[rest.length - 1] : "";
+    const mid = rest.length > 1 ? rest.slice(0, -1).join("-") + "-" : "";
+    body += `<text x="26" y="${y + 46}" ${mono}>SGTIN:${xml(line1)}</text>
+  <text x="127" y="${y + 82}" ${mono}>${xml(mid)}<tspan font-weight="bold" font-size="31">${xml(last)}</tspan></text>`;
+    y += 82;
+  } else {
+    body += `<text x="26" y="${y + 46}" ${mono}>SGTIN: ${xml(cut(d.sgtin, 22))}</text>`;
+    y += 46;
+  }
+  const h = y + 34;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 ${h}" width="50mm" height="${(h / 10).toFixed(1)}mm" font-family="Arial,Helvetica,sans-serif">
+  <rect x="3" y="3" width="494" height="${h - 6}" rx="22" fill="#fff" stroke="#9a9a9a" stroke-width="4"/>
   <text x="250" y="58" text-anchor="middle" font-size="38" fill="#444">QR-Code-Aufkleber</text>
   <text x="250" y="92" text-anchor="middle" font-size="21" font-weight="bold" text-decoration="underline" fill="#000">Aufkleber sorgfältig aufbewahren!</text>
   <rect x="${ox}" y="${oy}" width="${area}" height="${area}" fill="#fff"/>
   <path d="${path}" fill="#000" shape-rendering="crispEdges"/>
-  <text x="26" y="530" font-size="32" font-weight="bold" fill="#000">${xml(cut(d.type, 22))}</text>
-  <text x="26" y="566" font-size="25" fill="#000">${xml(cut(d.name, 28))}</text>
-  <text x="26" y="598" font-size="22" fill="#555">${xml(cut([d.room, d.loc].filter(Boolean).join(" · "), 32))}</text>
-  ${keyLines}
-  <line x1="26" y1="712" x2="474" y2="712" stroke="#000" stroke-width="3"/>
-  ${sg}
+  ${body}
 </svg>`;
 }
 
@@ -107,7 +126,8 @@ function svgToPng(svg, scale = 8) {
     const img = new Image();
     const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }));
     img.onload = () => {
-      const c = document.createElement("canvas"); c.width = 500 * scale / 2; c.height = 835 * scale / 2;
+      const vb = svg.match(/viewBox="0 0 (\d+) (\d+)"/); const vw = vb ? +vb[1] : 500, vh = vb ? +vb[2] : 835;
+      const c = document.createElement("canvas"); c.width = vw * scale / 2; c.height = vh * scale / 2;
       const x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height);
       URL.revokeObjectURL(url); c.toBlob((b) => (b ? res(b) : rej(new Error("PNG konnte nicht erzeugt werden"))), "image/png");
     };
@@ -121,7 +141,7 @@ export function sheetHtml(devices) {
   return `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>QR-Code-Aufkleber</title>
 <style>@page{size:A4;margin:10mm}body{margin:0;font-family:Arial,sans-serif}
 .grid{display:grid;grid-template-columns:repeat(3,50mm);gap:6mm 8mm;justify-content:center}
-.s{width:50mm;height:83.5mm;break-inside:avoid;page-break-inside:avoid}.s svg{display:block}
+.s{width:50mm;break-inside:avoid;page-break-inside:avoid}.s svg{display:block}
 .hint{font-size:12px;color:#555;margin:0 0 8mm}@media print{.hint{display:none}}</style></head>
 <body><p class="hint">${devices.length} QR-Code-Aufkleber. Ausdrucken (Größe 100 %, keine Skalierung) und auf Klebefolie oder Etikettenpapier ausschneiden.</p>
 <div class="grid">${items}</div></body></html>`;
@@ -141,7 +161,8 @@ header{position:sticky;top:0;z-index:5;background:var(--app-header-background-co
 header .top{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 header h1{margin:0;font-size:18px;font-weight:500}
 .bar{display:flex;gap:8px;flex-wrap:wrap}
-button{font:inherit;border:0;border-radius:10px;padding:10px 14px;background:#fff;color:#0b5cab;font-weight:600;cursor:pointer}
+button{font:inherit;display:inline-flex;align-items:center;justify-content:center;text-align:center;line-height:1.2;min-width:0;
+  border:0;border-radius:10px;padding:11px 14px;background:#fff;color:#0b5cab;font-weight:600;cursor:pointer;overflow-wrap:anywhere;-webkit-tap-highlight-color:transparent}
 header button.burger{background:transparent;color:inherit;padding:4px 8px;font-size:22px;line-height:1}
 button.pri{background:var(--pri);color:var(--onpri)}
 button.bad{background:var(--bad);color:#fff}
@@ -159,23 +180,28 @@ input,select,textarea{font:inherit;width:100%;padding:10px;border:1px solid var(
 .tag{display:inline-block;background:color-mix(in srgb,var(--pri) 18%,transparent);color:var(--pri);border-radius:6px;padding:1px 7px;font-size:12px;margin-right:4px}
 .tag.miss{background:color-mix(in srgb,#f59e0b 25%,transparent);color:inherit}.tag.ok{background:color-mix(in srgb,#22a559 25%,transparent);color:inherit}
 .empty{text-align:center;color:var(--mut);padding:40px 10px}
-dialog{border:0;border-radius:14px;padding:0;width:min(94vw,560px);max-height:92vh;background:var(--card);color:var(--ink)}
+dialog{border:0;border-radius:14px;padding:0;width:min(94vw,560px);max-height:92vh;overflow-y:auto;overscroll-behavior:contain;background:var(--card);color:var(--ink)}
 dialog::backdrop{background:#0008}
-.dlg{padding:14px;display:flex;flex-direction:column;gap:10px}
+.dlg{padding:14px 14px 10px;display:flex;flex-direction:column;gap:12px}
+header h1{line-height:1.2}#count{font-size:13px;opacity:.9;font-weight:400}
 .dlg h2{margin:0;font-size:18px;font-weight:500}
 label{font-size:13px;color:var(--mut);display:block;margin-bottom:3px}
-.row{display:flex;gap:8px}.row>*{flex:1;min-width:0}.row>.fix{flex:none}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}.row>*{flex:1 1 220px;min-width:0}
+.keyrow{display:flex;gap:8px}.keyrow input{flex:1;min-width:0}.keyrow button{flex:none}
+.actions{display:flex;flex-wrap:wrap;gap:8px;position:sticky;bottom:0;background:var(--card);padding:10px 0 2px;border-top:1px solid var(--line);margin-top:4px}
+.actions button{flex:1 1 auto;padding:12px 10px}
+.btns{display:flex;flex-wrap:wrap;gap:8px}.btns button{flex:1 1 auto}
 video{width:100%;border-radius:10px;background:#000;max-height:55vh}
 .msg{padding:8px 10px;border-radius:8px;font-size:14px}
 .msg.warn{background:color-mix(in srgb,#f59e0b 22%,transparent)}
 .msg.ok{background:color-mix(in srgb,#22a559 22%,transparent)}
-#eSticker{background:#fff;border-radius:10px;padding:6px;align-self:flex-start}#eSticker svg{display:block;width:170px;height:auto}
+#eSticker{background:#fff;border-radius:10px;padding:6px;align-self:flex-start}#eSticker svg{display:block;width:190px;height:auto}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1b2430;color:#fff;padding:10px 16px;border-radius:10px;z-index:99;display:none}
 small{color:var(--mut)}
 </style>
 <header>
   <div class="top"><button class="burger" id="bBurger" style="display:none" aria-label="Menü">☰</button>
-    <h1>HmIP Geräte <span id="count" style="font-weight:400;font-size:14px"></span></h1></div>
+    <div><h1>HmIP Geräte</h1><div id="count"></div></div></div>
   <div class="bar">
     <button id="bScan">📷 Scannen</button>
     <button id="bPhoto">🖼️ Foto</button>
@@ -206,12 +232,9 @@ small{color:var(--mut)}
 <dialog id="dEdit"><form class="dlg" id="fEdit" method="dialog">
   <h2 id="eTitle">Gerät</h2>
   <div id="eMsg"></div>
-  <div class="row">
-    <div><label>SGTIN / Gerätenummer</label><input id="eSgtin" autocapitalize="characters" spellcheck="false"></div>
-    <div><label>Letzte 4 Ziffern</label><input id="eLast4" readonly></div>
-  </div>
-  <div><label>Geräteschlüssel (geheim; 32 Hex-Zeichen oder gedruckte Schreibweise)</label>
-    <div class="row"><input id="eKey" type="password" autocomplete="off" spellcheck="false" autocapitalize="characters"><button type="button" class="ghost fix" id="eKeyShow">anzeigen</button></div></div>
+  <div><label>SGTIN / Gerätenummer <span id="eLast4"></span></label><input id="eSgtin" autocapitalize="characters" spellcheck="false"></div>
+  <div><label>Geräteschlüssel (geheim; Hex oder gedruckte Schreibweise)</label>
+    <div class="keyrow"><input id="eKey" type="password" autocomplete="off" spellcheck="false" autocapitalize="characters"><button type="button" class="ghost" id="eKeyShow">anzeigen</button></div></div>
   <div id="eRawWrap" hidden><label>Scan-Inhalt (Format unbekannt, unverändert gespeichert)</label><textarea id="eRaw" rows="2" readonly></textarea></div>
   <div class="row">
     <div><label>Name (wie in HmIP-App)</label><input id="eName"></div>
@@ -228,7 +251,7 @@ small{color:var(--mut)}
     <button type="button" class="ghost" id="eStToggle">Aufkleber anzeigen</button>
     <div id="eStWrap" hidden style="margin-top:8px">
       <div id="eSticker"></div>
-      <div class="row" style="margin-top:8px">
+      <div class="btns" style="margin-top:8px">
         <button type="button" class="ghost" id="eStPng">PNG</button>
         <button type="button" class="ghost" id="eStSvg">SVG</button>
         <button type="button" class="ghost" id="eStPrint">Drucken</button>
@@ -236,7 +259,7 @@ small{color:var(--mut)}
       <small>Der QR-Code enthält SGTIN und Geräteschlüssel und lässt sich mit der Homematic-IP-App scannen. Der Schlüssel steht auch als Text im Aufkleber, so wie beim Original.</small>
     </div>
   </div>
-  <div class="row">
+  <div class="actions">
     <button type="button" class="bad" id="eDel">Löschen</button>
     <button type="button" class="ghost" id="eCancel">Abbrechen</button>
     <button type="submit" class="pri" id="eSave">Speichern</button>
@@ -275,6 +298,7 @@ function init(host) {
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const last4 = (s) => norm(s).slice(-4);
+  const setLast4 = (s) => { $("eLast4").textContent = norm(s) ? `(letzte 4: ${last4(s)})` : ""; };
   function findDup(sgtin, raw, exceptId) {
     const ns = norm(sgtin);
     return devices.find((d) => d.id !== exceptId && ((ns && norm(d.sgtin) === ns) || (raw && d.raw && d.raw === raw)));
@@ -393,7 +417,7 @@ function init(host) {
   function render() {
     refreshLists();
     const list = filtered();
-    $("count").textContent = `(${devices.length}, QR-Code-Aufkleber ${devices.filter(hasCode).length}/${devices.length})`;
+    $("count").textContent = `${devices.length} Geräte · QR-Code-Aufkleber ${devices.filter(hasCode).length}/${devices.length}`;
     $("list").innerHTML = list.length ? list.map((d) => {
       const ok = hasCode(d);
       return `
@@ -423,7 +447,7 @@ function init(host) {
   function openEdit(d, msg) {
     cur = d;
     $("eTitle").textContent = d.isNew ? "Neues Gerät" : "Gerät bearbeiten";
-    $("eSgtin").value = d.sgtin; $("eLast4").value = last4(d.sgtin);
+    $("eSgtin").value = d.sgtin; setLast4(d.sgtin);
     $("eKey").value = d.key || ""; $("eKey").type = "password"; $("eKeyShow").textContent = "anzeigen";
     $("eRaw").value = d.raw || ""; $("eRawWrap").hidden = !d.raw;
     $("eName").value = d.name; $("eType").value = d.type; $("eRoom").value = d.room; $("eLoc").value = d.loc; $("eNote").value = d.note; $("eFw").value = d.fw || "";
@@ -448,7 +472,7 @@ function init(host) {
   }
 
   ["eSgtin", "eKey", "eName", "eType", "eRoom", "eLoc"].forEach((id) => $(id).addEventListener("input", () => {
-    if (id === "eSgtin") $("eLast4").value = last4($("eSgtin").value);
+    if (id === "eSgtin") setLast4($("eSgtin").value);
     showMsg(); updateSticker();
   }));
   $("eKeyShow").onclick = () => { const k = $("eKey"); const show = k.type === "password"; k.type = show ? "text" : "password"; $("eKeyShow").textContent = show ? "verbergen" : "anzeigen"; };
