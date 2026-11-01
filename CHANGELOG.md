@@ -1,5 +1,8 @@
 # Änderungsprotokoll
 
+## 1.7.1
+- Aufkleber ohne Key: Der QR-Code hat jetzt das Format `EQ01SG<SGTIN>` (wie das Original, ohne Key-Teil). Diese Schreibweise erkennt die Homematic-IP-App beim Anlernen; die SGTIN allein lehnt sie ab (getestet am 01.11.2026).
+
 ## 1.7.0
 - Aufkleber auch ohne erfassten Key: Der QR-Code enthält dann nur die SGTIN, der Aufkleber ist mit „Ohne Key – nur Online-Anlernen“ gekennzeichnet. Laut Homematic-IP-Anwenderhandbuch (5.3.6.1) genügen für das normale Anlernen die letzten vier Ziffern der SGTIN; für das Offline-Anlernen an der HCU (5.3.6.2) wird der Original-Key gebraucht. Ob die Homematic-IP-App einen QR-Code nur mit SGTIN annimmt, ist nicht dokumentiert.
 - Der Dokumentationsbogen zeigt damit für alle Geräte mit SGTIN einen Aufkleber.
