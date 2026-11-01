@@ -1,4 +1,102 @@
-/* HmIP Geräteverwaltung – Home-Assistant-Panel (Web Component, keine Abhängigkeiten) */
+/* HmIP Geräteverwaltung – Home-Assistant-Panel (Web Component).
+   QR-Codes erzeugt die MIT-lizenzierte Bibliothek qrcode-generator (Kazuhiko Arase), siehe qrcode.mjs. */
+import qrcode from "./qrcode.mjs";
+
+/* ---------- Code-Format der HmIP-QR-Code-Aufkleber ----------
+   Beobachtet: EQ01 + "SG" + SGTIN (24 Hex) + "DLK" + Geräteschlüssel (32 Hex). Alles andere gilt als unbekanntes Format. */
+const CODE_RE = /^(EQ\d{2})SG([0-9A-F]{24})DLK([0-9A-F]{32})$/;
+export const norm = (s) => String(s || "").replace(/[\s-]/g, "").toUpperCase();
+export function parseCode(raw) {
+  const n = norm(raw);
+  const m = n.match(CODE_RE);
+  if (m) return { fmt: m[1], sgtin: m[2], key: m[3], raw: "" };
+  const g = n.match(/[0-9A-F]{24}/); // Notlösung für abweichende Formate: erste 24-stellige Hex-Folge
+  return { fmt: "", sgtin: g ? g[0] : "", key: "", raw: String(raw || "").trim() };
+}
+const validSgtin = (s) => /^[0-9A-F]{24}$/.test(norm(s));
+const validKey = (s) => /^[0-9A-F]{32}$/.test(norm(s));
+/* Inhalt des QR-Codes, den die Homematic-IP-App beim Scannen erwartet */
+export function codeContent(d) {
+  if (validSgtin(d.sgtin) && validKey(d.key)) return `${d.fmt || "EQ01"}SG${norm(d.sgtin)}DLK${norm(d.key)}`;
+  return d.raw || "";
+}
+export const hasCode = (d) => !!(validKey(d.key) || d.raw);
+
+/* ---------- QR-Code-Aufkleber (SVG) ---------- */
+export function qrMatrix(text) {
+  const mode = /^[0-9A-Z $%*+\-./:]+$/.test(text) ? "Alphanumeric" : "Byte";
+  const qr = qrcode(0, "M");
+  qr.addData(text, mode);
+  qr.make();
+  return { n: qr.getModuleCount(), dark: (r, c) => qr.isDark(r, c) };
+}
+const xml = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const cut = (s, n) => (String(s || "").length > n ? String(s).slice(0, n - 1) + "…" : String(s || ""));
+const groups = (s) => norm(s).match(/.{1,4}/g) || [];
+
+/* Nachempfunden dem Original-Aufkleber (Hochformat, 50 x 83,5 mm; 1 Einheit = 0,1 mm). Der Geräteschlüssel steckt nur im QR-Code. */
+export function stickerSvg(d) {
+  const text = codeContent(d);
+  if (!text) return "";
+  const q = qrMatrix(text);
+  const area = 400, quiet = 4, m = area / (q.n + 2 * quiet), ox = 50, oy = 120;
+  let path = "";
+  for (let r = 0; r < q.n; r++) for (let c = 0; c < q.n; c++) {
+    if (q.dark(r, c)) path += `M${(ox + (c + quiet) * m).toFixed(2)} ${(oy + (r + quiet) * m).toFixed(2)}h${m.toFixed(2)}v${m.toFixed(2)}h${(-m).toFixed(2)}z`;
+  }
+  const g = groups(d.sgtin);
+  const line1 = g.slice(0, 3).join("-") + (g.length > 3 ? "-" : "");
+  const rest = g.slice(3);
+  const last = rest.length ? rest[rest.length - 1] : "";
+  const mid = rest.length > 1 ? rest.slice(0, -1).join("-") + "-" : "";
+  const sg = validSgtin(d.sgtin)
+    ? `<text x="30" y="745" font-family="Courier New,monospace" font-size="29">SGTIN:${xml(line1)}</text>
+  <text x="150" y="790" font-family="Courier New,monospace" font-size="29">${xml(mid)}<tspan font-weight="bold" font-size="32">${xml(last)}</tspan></text>`
+    : `<text x="30" y="745" font-family="Courier New,monospace" font-size="26">SGTIN: ${xml(cut(d.sgtin, 24))}</text>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 835" width="50mm" height="83.5mm" font-family="Arial,Helvetica,sans-serif">
+  <rect x="3" y="3" width="494" height="829" rx="22" fill="#fff" stroke="#9a9a9a" stroke-width="4"/>
+  <text x="250" y="62" text-anchor="middle" font-size="38" fill="#444">QR-Code-Aufkleber</text>
+  <text x="250" y="100" text-anchor="middle" font-size="21" font-weight="bold" text-decoration="underline" fill="#000">Aufkleber sorgfältig aufbewahren!</text>
+  <rect x="${ox}" y="${oy}" width="${area}" height="${area}" fill="#fff"/>
+  <path d="${path}" fill="#000" shape-rendering="crispEdges"/>
+  <text x="30" y="580" font-size="34" font-weight="bold" fill="#000">${xml(cut(d.type, 20))}</text>
+  <text x="30" y="624" font-size="28" fill="#000">${xml(cut(d.name, 24))}</text>
+  <text x="30" y="660" font-size="25" fill="#555">${xml(cut([d.room, d.loc].filter(Boolean).join(" · "), 28))}</text>
+  <line x1="30" y1="688" x2="470" y2="688" stroke="#000" stroke-width="3"/>
+  ${sg}
+</svg>`;
+}
+
+function downloadBlob(name, blob) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 800);
+}
+function svgToPng(svg, scale = 8) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }));
+    img.onload = () => {
+      const c = document.createElement("canvas"); c.width = 500 * scale / 2; c.height = 835 * scale / 2;
+      const x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url); c.toBlob((b) => (b ? res(b) : rej(new Error("PNG konnte nicht erzeugt werden"))), "image/png");
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("Aufkleber konnte nicht gezeichnet werden")); };
+    img.src = url;
+  });
+}
+/* Druckbogen: 3 Spalten, 9 Aufkleber je A4-Seite */
+export function sheetHtml(devices) {
+  const items = devices.map((d) => `<div class="s">${stickerSvg(d)}</div>`).join("");
+  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>QR-Code-Aufkleber</title>
+<style>@page{size:A4;margin:10mm}body{margin:0;font-family:Arial,sans-serif}
+.grid{display:grid;grid-template-columns:repeat(3,50mm);gap:6mm 8mm;justify-content:center}
+.s{width:50mm;height:83.5mm;break-inside:avoid;page-break-inside:avoid}.s svg{display:block}
+.hint{font-size:12px;color:#555;margin:0 0 8mm}@media print{.hint{display:none}}</style></head>
+<body><p class="hint">${devices.length} QR-Code-Aufkleber. Ausdrucken (Größe 100 %, keine Skalierung) und auf Klebefolie oder Etikettenpapier ausschneiden.</p>
+<div class="grid">${items}</div></body></html>`;
+}
 
 const TEMPLATE = `
 <style>
@@ -19,28 +117,30 @@ header button.burger{background:transparent;color:inherit;padding:4px 8px;font-s
 button.pri{background:var(--pri);color:var(--onpri)}
 button.bad{background:var(--bad);color:#fff}
 button.ghost{background:transparent;color:var(--pri);border:1px solid var(--line)}
+button:disabled{opacity:.5}
 main{padding:12px;max-width:900px;margin:0 auto}
 .tools{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
 input,select,textarea{font:inherit;width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
 .tools input{flex:2;min-width:160px}.tools select{flex:1;min-width:120px}
-.tag.miss{background:color-mix(in srgb,#f59e0b 25%,transparent);color:inherit}.tag.ok{background:color-mix(in srgb,#22a559 25%,transparent);color:inherit}
 .item{background:var(--card);border-radius:12px;padding:10px 12px;margin-bottom:8px;display:flex;gap:10px;align-items:center;
   box-shadow:0 1px 2px #0002;cursor:pointer}
-.item img{width:56px;height:56px;object-fit:cover;border-radius:8px;background:#8883;flex:none}
+.ico{width:48px;height:48px;border-radius:10px;flex:none;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;letter-spacing:.5px}
+.ico.ok{background:color-mix(in srgb,#22a559 28%,transparent)}.ico.miss{background:color-mix(in srgb,#f59e0b 28%,transparent)}
 .item .t{font-weight:600}.item .s{color:var(--mut);font-size:14px;word-break:break-all}
 .tag{display:inline-block;background:color-mix(in srgb,var(--pri) 18%,transparent);color:var(--pri);border-radius:6px;padding:1px 7px;font-size:12px;margin-right:4px}
+.tag.miss{background:color-mix(in srgb,#f59e0b 25%,transparent);color:inherit}.tag.ok{background:color-mix(in srgb,#22a559 25%,transparent);color:inherit}
 .empty{text-align:center;color:var(--mut);padding:40px 10px}
 dialog{border:0;border-radius:14px;padding:0;width:min(94vw,560px);max-height:92vh;background:var(--card);color:var(--ink)}
 dialog::backdrop{background:#0008}
 .dlg{padding:14px;display:flex;flex-direction:column;gap:10px}
 .dlg h2{margin:0;font-size:18px;font-weight:500}
 label{font-size:13px;color:var(--mut);display:block;margin-bottom:3px}
-.row{display:flex;gap:8px}.row>*{flex:1;min-width:0}
+.row{display:flex;gap:8px}.row>*{flex:1;min-width:0}.row>.fix{flex:none}
 video{width:100%;border-radius:10px;background:#000;max-height:55vh}
-.photo{max-width:100%;max-height:220px;border-radius:10px;align-self:flex-start}
 .msg{padding:8px 10px;border-radius:8px;font-size:14px}
 .msg.warn{background:color-mix(in srgb,#f59e0b 22%,transparent)}
 .msg.ok{background:color-mix(in srgb,#22a559 22%,transparent)}
+#eSticker{background:#fff;border-radius:10px;padding:6px;align-self:flex-start}#eSticker svg{display:block;width:170px;height:auto}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1b2430;color:#fff;padding:10px 16px;border-radius:10px;z-index:99;display:none}
 small{color:var(--mut)}
 </style>
@@ -58,7 +158,7 @@ small{color:var(--mut)}
   <div class="tools">
     <input id="q" type="search" placeholder="Suchen (Name, Raum, SGTIN …)">
     <select id="fRoom"><option value="">Alle Räume</option></select>
-    <select id="fStatus"><option value="">Alle Geräte</option><option value="missing">Zettel fehlt</option><option value="done">Zettel erfasst</option></select>
+    <select id="fStatus"><option value="">Alle Geräte</option><option value="missing">QR-Code-Aufkleber fehlt</option><option value="done">QR-Code-Aufkleber erfasst</option></select>
   </div>
   <div id="list"></div>
 </main>
@@ -68,7 +168,7 @@ small{color:var(--mut)}
 <div class="toast" id="toast"></div>
 
 <dialog id="dScan"><div class="dlg">
-  <h2>Zettel scannen</h2>
+  <h2>QR-Code-Aufkleber scannen</h2>
   <video id="vid" playsinline muted></video>
   <div id="scanMsg" class="msg warn">Kamera wird gestartet …</div>
   <button class="ghost" id="scanClose">Abbrechen</button>
@@ -77,12 +177,13 @@ small{color:var(--mut)}
 <dialog id="dEdit"><form class="dlg" id="fEdit" method="dialog">
   <h2 id="eTitle">Gerät</h2>
   <div id="eMsg"></div>
-  <img id="ePhoto" class="photo" alt="" hidden>
-  <div><label>Rohinhalt des Codes (wie gescannt)</label><textarea id="eRaw" rows="2"></textarea></div>
   <div class="row">
-    <div><label>SGTIN / Gerätenummer</label><input id="eSgtin" autocapitalize="characters"></div>
+    <div><label>SGTIN / Gerätenummer</label><input id="eSgtin" autocapitalize="characters" spellcheck="false"></div>
     <div><label>Letzte 4 Ziffern</label><input id="eLast4" readonly></div>
   </div>
+  <div><label>Geräteschlüssel (geheim, 32 Zeichen, aus dem QR-Code)</label>
+    <div class="row"><input id="eKey" type="password" autocomplete="off" spellcheck="false" autocapitalize="characters"><button type="button" class="ghost fix" id="eKeyShow">anzeigen</button></div></div>
+  <div id="eRawWrap" hidden><label>Scan-Inhalt (Format unbekannt, unverändert gespeichert)</label><textarea id="eRaw" rows="2" readonly></textarea></div>
   <div class="row">
     <div><label>Name (wie in HmIP-App)</label><input id="eName"></div>
     <div><label>Gerätetyp</label><input id="eType" list="types" placeholder="z. B. HmIP-SWDO"></div>
@@ -93,9 +194,18 @@ small{color:var(--mut)}
   </div>
   <div><label>Firmware</label><input id="eFw"></div>
   <div><label>Notiz</label><textarea id="eNote" rows="2"></textarea></div>
-  <div class="row">
-    <button type="button" class="ghost" id="ePhotoBtn">Foto ersetzen</button>
-    <button type="button" class="ghost" id="ePhotoDel">Foto entfernen</button>
+  <div id="eStBox" hidden>
+    <label>QR-Code-Aufkleber (aus den gespeicherten Daten erzeugt)</label>
+    <button type="button" class="ghost" id="eStToggle">Aufkleber anzeigen</button>
+    <div id="eStWrap" hidden style="margin-top:8px">
+      <div id="eSticker"></div>
+      <div class="row" style="margin-top:8px">
+        <button type="button" class="ghost" id="eStPng">PNG</button>
+        <button type="button" class="ghost" id="eStSvg">SVG</button>
+        <button type="button" class="ghost" id="eStPrint">Drucken</button>
+      </div>
+      <small>Der QR-Code enthält SGTIN und Geräteschlüssel und lässt sich mit der Homematic-IP-App scannen. Den Schlüssel als Text druckt der Aufkleber nicht.</small>
+    </div>
   </div>
   <div class="row">
     <button type="button" class="bad" id="eDel">Löschen</button>
@@ -106,18 +216,20 @@ small{color:var(--mut)}
 </form></dialog>
 
 <dialog id="dMenu"><div class="dlg">
-  <h2>Export / Backup</h2>
+  <h2>Übernahme, Aufkleber, Export</h2>
   <button class="pri" id="mHa">Geräte aus Home Assistant übernehmen</button>
   <small>Liest alle eQ-3-Geräte mit Seriennummer aus Home Assistant (Name, Typ, Raum, Firmware). Vorhandene Einträge und deine Eingaben bleiben erhalten.</small>
+  <button class="ghost" id="mSheet">QR-Code-Aufkleber drucken (aktuelle Auswahl)</button>
   <button class="ghost" id="mCsv">CSV für Excel exportieren</button>
-  <button class="ghost" id="mJson">Backup (JSON mit Fotos)</button>
+  <small>Die CSV enthält keine Geräteschlüssel.</small>
+  <button class="ghost" id="mJson">Backup (JSON, enthält die Geräteschlüssel)</button>
   <button class="ghost" id="mImport">Backup importieren</button>
-  <small>Die Daten liegen in Home Assistant (.storage) und sind in dessen Backups enthalten. Backups aus den früheren Einzeldatei- und Add-on-Versionen lassen sich importieren.</small>
+  <small>Die Daten liegen in Home Assistant (.storage) und sind in dessen Backups enthalten. Das Panel ist nur für Administratoren sichtbar. Backups aus früheren Versionen lassen sich importieren (Fotos werden nicht mehr übernommen).</small>
   <button class="ghost" id="mClose">Schließen</button>
 </div></dialog>
 `;
 
-const FIELDS = ["id", "raw", "sgtin", "name", "type", "room", "loc", "note", "fw", "created", "updated", "thumb"];
+const FIELDS = ["id", "raw", "sgtin", "key", "fmt", "name", "type", "room", "loc", "note", "fw", "created", "updated"];
 
 function init(host) {
   const root = host.shadowRoot;
@@ -129,46 +241,22 @@ function init(host) {
   const errText = (e) => (e && (e.message || e.code)) || JSON.stringify(e);
   function toast(t) {
     const e = $("toast"); e.textContent = t; e.style.display = "block";
-    clearTimeout(toast.t); toast.t = setTimeout(() => (e.style.display = "none"), 2500);
+    clearTimeout(toast.t); toast.t = setTimeout(() => (e.style.display = "none"), 2800);
   }
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-  const norm = (s) => String(s || "").replace(/[\s-]/g, "").toUpperCase();
-  /* Heuristik: SGTIN-Vorschlag = erste 24-stellige Hex-Folge im Rohinhalt. Bleibt leer, wenn nichts passt;
-     das Feld ist editierbar, der Rohinhalt wird immer unverändert gespeichert. */
-  const guessSgtin = (raw) => { const m = norm(raw).match(/[0-9A-F]{24}/); return m ? m[0] : ""; };
   const last4 = (s) => norm(s).slice(-4);
-  function findDup(raw, sg, exceptId) {
-    const nr = norm(raw), ns = norm(sg);
-    return devices.find((d) => d.id !== exceptId && ((ns && norm(d.sgtin) === ns) || (nr && norm(d.raw) === nr)));
+  function findDup(sgtin, raw, exceptId) {
+    const ns = norm(sgtin);
+    return devices.find((d) => d.id !== exceptId && ((ns && norm(d.sgtin) === ns) || (raw && d.raw && d.raw === raw)));
   }
-
-  function drawToJpeg(src, w, h, max, q) {
-    const k = Math.min(1, max / Math.max(w, h));
-    const c = document.createElement("canvas");
-    c.width = Math.round(w * k); c.height = Math.round(h * k);
-    c.getContext("2d").drawImage(src, 0, 0, c.width, c.height);
-    return c.toDataURL("image/jpeg", q);
-  }
-  function shrink(src, max = 900, q = 0.72) {
-    return new Promise((res, rej) => {
-      if (src instanceof HTMLVideoElement) { res(drawToJpeg(src, src.videoWidth, src.videoHeight, max, q)); return; }
-      const img = new Image(), u = typeof src === "string" ? src : URL.createObjectURL(src);
-      img.onload = () => { res(drawToJpeg(img, img.naturalWidth, img.naturalHeight, max, q)); if (typeof src !== "string") URL.revokeObjectURL(u); };
-      img.onerror = () => rej(new Error("Bild nicht lesbar"));
-      img.src = u;
-    });
-  }
-  const thumbOf = (dataUrl) => shrink(dataUrl, 128, 0.6);
 
   /* ---------- Server-API (Websocket) ---------- */
   const dbAll = () => ws({ type: "hmip_geraete/list" });
-  async function dbSave(d) {
+  function dbSave(d) {
     const device = {};
     FIELDS.forEach((k) => (device[k] = d[k] ?? ""));
-    const msg = { type: "hmip_geraete/save", device };
-    if (typeof d.photo === "string") msg.photo = d.photo;
-    return ws(msg);
+    return ws({ type: "hmip_geraete/save", device });
   }
   const dbDel = (id) => ws({ type: "hmip_geraete/delete", device_id: id });
 
@@ -192,7 +280,7 @@ function init(host) {
     try {
       stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 } }, audio: false });
       $("vid").srcObject = stream; await $("vid").play();
-      $("scanMsg").textContent = "Zettel mit dem Code ins Bild halten …"; scanning = true; loop(det);
+      $("scanMsg").textContent = "QR-Code-Aufkleber ins Bild halten …"; scanning = true; loop(det);
     } catch (e) { $("scanMsg").textContent = "Kamera nicht verfügbar: " + e.message + ". Nimm „Foto“ oder „Manuell“."; }
   }
 
@@ -204,10 +292,9 @@ function init(host) {
           const r = await det.detect(v);
           if (r.length) {
             const raw = r[0].rawValue;
-            const photo = await shrink(v), thumb = await thumbOf(photo);
             stopScan();
             if (navigator.vibrate) navigator.vibrate(60);
-            openFromScan(raw, photo, thumb); return;
+            openFromScan(raw); return;
           }
         }
       } catch (e) { /* weiter versuchen */ }
@@ -223,31 +310,37 @@ function init(host) {
   }
   host._stopScan = stopScan;
 
+  /* Foto wird nur ausgewertet und nicht gespeichert */
   async function fromPhoto(file) {
     if (!file) return;
     const det = await getDetector();
     let raw = "";
     if (det) { try { const bmp = await createImageBitmap(file); const r = await det.detect(bmp); if (r.length) raw = r[0].rawValue; } catch (e) { /* kein Code */ } }
-    const photo = await shrink(file), thumb = await thumbOf(photo);
-    openFromScan(raw, photo, thumb, raw ? null : (det ? "Im Foto wurde kein Code erkannt. Inhalt bitte von Hand eintragen." : "Dieser Browser erkennt keine Codes im Foto. Inhalt bitte von Hand eintragen."));
+    if (!raw) { openEdit(newDev(), det ? "Im Foto wurde kein QR-Code erkannt. SGTIN und Schlüssel bitte von Hand eintragen." : "Dieser Browser erkennt keine Codes im Foto. SGTIN und Schlüssel bitte von Hand eintragen."); return; }
+    openFromScan(raw);
   }
 
-  /* Gescannter Zettel: passt die SGTIN zu einem vorhandenen Gerät, wird dieses ergänzt statt ein neues anzulegen. */
-  function openFromScan(raw, photo, thumb, note) {
-    const sg = guessSgtin(raw);
-    const m = sg ? devices.find((d) => norm(d.sgtin) === sg) : null;
-    if (!m) { openEdit(newDev(raw, photo, thumb), note || (devices.length ? "Dieses Gerät ist noch nicht in der Liste." : null)); return; }
+  /* Gescannter Code: passt die SGTIN zu einem vorhandenen Gerät, wird dieses ergänzt statt ein neues anzulegen. */
+  function openFromScan(raw) {
+    const p = parseCode(raw);
+    const m = p.sgtin ? devices.find((d) => norm(d.sgtin) === p.sgtin) : null;
+    if (!m) {
+      const d = newDev();
+      Object.assign(d, { sgtin: p.sgtin, key: p.key, fmt: p.fmt, raw: p.raw });
+      openEdit(d, p.key ? (devices.length ? "Dieses Gerät ist noch nicht in der Liste." : null)
+        : "Das Format des Codes ist unbekannt. Er wird unverändert gespeichert, einen Aufkleber kann die App daraus nicht erzeugen.");
+      return;
+    }
     const d = { ...m };
-    if (!m.raw) d.raw = raw;
-    if (!m.hasPhoto && photo) { d.photo = photo; d.thumb = thumb; }
-    openEdit(d, note || `Gerät aus der Liste erkannt: ${m.name || m.type || "ohne Name"}.` + (m.raw || m.hasPhoto ? " Zu diesem Gerät war schon ein Zettel erfasst." : ""));
+    const had = hasCode(m);
+    if (!validKey(m.key) && p.key) { d.key = p.key; d.fmt = p.fmt; }
+    if (!hasCode(m) && p.raw) d.raw = p.raw;
+    openEdit(d, `Gerät aus der Liste erkannt: ${m.name || m.type || "ohne Name"}.` + (had ? " Der QR-Code-Aufkleber war schon erfasst." : ""));
   }
 
   /* ---------- Datenmodell ---------- */
-  function newDev(raw = "", photo = "", thumb = "") {
-    const d = { id: uid(), raw, sgtin: guessSgtin(raw), name: "", type: "", room: "", loc: "", note: "", thumb, created: new Date().toISOString(), isNew: true };
-    if (photo) d.photo = photo;
-    return d;
+  function newDev() {
+    return { id: uid(), raw: "", sgtin: "", key: "", fmt: "", name: "", type: "", room: "", loc: "", note: "", fw: "", created: new Date().toISOString(), isNew: true };
   }
 
   /* ---------- UI ---------- */
@@ -261,71 +354,91 @@ function init(host) {
     sel.value = rooms.includes(v) ? v : "";
   }
 
-  const hasLabel = (d) => !!(d.raw || d.hasPhoto);
-  function render() {
-    refreshLists();
+  function filtered() {
     const q = $("q").value.trim().toLowerCase(), fr = $("fRoom").value, fs = $("fStatus").value;
-    const list = devices.filter((d) => (!fr || d.room === fr) && (!fs || (fs === "done") === hasLabel(d)) && (!q || [d.name, d.type, d.room, d.loc, d.sgtin, d.raw, d.note].join(" ").toLowerCase().includes(q)))
+    return devices.filter((d) => (!fr || d.room === fr) && (!fs || (fs === "done") === hasCode(d)) && (!q ||
+      [d.name, d.type, d.room, d.loc, d.sgtin, d.note].join(" ").toLowerCase().includes(q)))
       .sort((a, b) => (a.room || "~").localeCompare(b.room || "~", "de") || (a.name || "").localeCompare(b.name || "", "de"));
-    $("count").textContent = `(${devices.length}, Zettel ${devices.filter(hasLabel).length}/${devices.length})`;
-    $("list").innerHTML = list.length ? list.map((d) => `
-      <div class="item" data-id="${esc(d.id)}">
-        ${d.thumb ? `<img src="${esc(d.thumb)}" alt="">` : `<img alt="" style="visibility:hidden">`}
-        <div style="min-width:0">
-          <div class="t">${esc(d.name || d.type || "(ohne Name)")}</div>
-          <div class="s"><span class="tag ${hasLabel(d) ? "ok" : "miss"}">${hasLabel(d) ? "Zettel ✓" : "Zettel fehlt"}</span>${d.room ? `<span class="tag">${esc(d.room)}</span>` : ""}${esc(d.loc)}</div>
-          <div class="s">${esc(d.type)}${d.type && d.sgtin ? " · " : ""}${d.sgtin ? "SGTIN …" + esc(last4(d.sgtin)) : ""}${d.fw ? " · FW " + esc(d.fw) : ""}</div>
-        </div></div>`).join("") :
-      `<div class="empty">${devices.length ? "Keine Treffer." : "Noch keine Geräte.<br>Tippe auf „Scannen“ und halte einen Barcodezettel vor die Kamera."}</div>`;
   }
 
-  function showPhoto() {
-    const src = typeof cur.photo === "string" ? cur.photo : cur.thumb;
-    const p = $("ePhoto"); p.hidden = !src; p.src = src || "";
+  function render() {
+    refreshLists();
+    const list = filtered();
+    $("count").textContent = `(${devices.length}, QR-Code-Aufkleber ${devices.filter(hasCode).length}/${devices.length})`;
+    $("list").innerHTML = list.length ? list.map((d) => {
+      const ok = hasCode(d);
+      return `
+      <div class="item" data-id="${esc(d.id)}">
+        <div class="ico ${ok ? "ok" : "miss"}">${ok ? "QR ✓" : "QR –"}</div>
+        <div style="min-width:0">
+          <div class="t">${esc(d.name || d.type || "(ohne Name)")}</div>
+          <div class="s"><span class="tag ${ok ? "ok" : "miss"}">${ok ? "QR-Code-Aufkleber erfasst" : "QR-Code-Aufkleber fehlt"}</span>${d.room ? `<span class="tag">${esc(d.room)}</span>` : ""}${esc(d.loc)}</div>
+          <div class="s">${esc(d.type)}${d.type && d.sgtin ? " · " : ""}${d.sgtin ? "SGTIN …" + esc(last4(d.sgtin)) : ""}${d.fw ? " · FW " + esc(d.fw) : ""}</div>
+        </div></div>`;
+    }).join("") :
+      `<div class="empty">${devices.length ? "Keine Treffer." : "Noch keine Geräte.<br>Öffne das Menü (⋯) und übernimm die Geräte aus Home Assistant, oder tippe auf „Scannen“."}</div>`;
+  }
+
+  function draft() {
+    return { sgtin: norm($("eSgtin").value), key: norm($("eKey").value), fmt: cur ? cur.fmt : "", raw: cur ? cur.raw : "",
+      name: $("eName").value.trim(), type: $("eType").value.trim(), room: $("eRoom").value.trim(), loc: $("eLoc").value.trim() };
+  }
+  function updateSticker() {
+    const d = draft();
+    const svg = validKey(d.key) && validSgtin(d.sgtin) ? stickerSvg(d) : "";
+    $("eStBox").hidden = !svg;
+    $("eSticker").innerHTML = $("eStWrap").hidden ? "" : svg;
+    if (!svg) $("eStWrap").hidden = true;
   }
 
   function openEdit(d, msg) {
     cur = d;
     $("eTitle").textContent = d.isNew ? "Neues Gerät" : "Gerät bearbeiten";
-    $("eRaw").value = d.raw; $("eSgtin").value = d.sgtin; $("eLast4").value = last4(d.sgtin);
+    $("eSgtin").value = d.sgtin; $("eLast4").value = last4(d.sgtin);
+    $("eKey").value = d.key || ""; $("eKey").type = "password"; $("eKeyShow").textContent = "anzeigen";
+    $("eRaw").value = d.raw || ""; $("eRawWrap").hidden = !d.raw;
     $("eName").value = d.name; $("eType").value = d.type; $("eRoom").value = d.room; $("eLoc").value = d.loc; $("eNote").value = d.note; $("eFw").value = d.fw || "";
-    showPhoto();
-    if (d.hasPhoto && typeof d.photo !== "string") {
-      const id = d.id;
-      ws({ type: "hmip_geraete/photo", device_id: id }).then((r) => {
-        if (cur && cur.id === id && typeof cur.photo !== "string" && r.photo) { $("ePhoto").src = r.photo; $("ePhoto").hidden = false; }
-      }).catch(() => {});
-    }
+    $("eStWrap").hidden = true; $("eStToggle").textContent = "Aufkleber anzeigen";
+    updateSticker();
     $("eDel").style.display = d.isNew ? "none" : "";
-    showDupMsg(msg);
+    showMsg(msg);
     $("dEdit").showModal();
   }
 
-  function showDupMsg(extra) {
+  function showMsg(extra) {
     let h = "";
     if (extra) h += `<div class="msg warn">${esc(extra)}</div>`;
     if (cur) {
-      const dup = findDup($("eRaw").value, $("eSgtin").value, cur.id);
-      if (dup) h += `<div class="msg warn">Achtung: Dieser Code ist schon erfasst als „${esc(dup.name || dup.type || "ohne Name")}“ (${esc(dup.room || "ohne Raum")}).</div>`;
-      else if (cur.isNew && $("eSgtin").value) h += `<div class="msg ok">SGTIN erkannt, noch nicht vorhanden.</div>`;
-      else if (cur.isNew && $("eRaw").value && !$("eSgtin").value) h += `<div class="msg warn">Aus dem Inhalt konnte keine SGTIN abgeleitet werden. Der Rohinhalt wird trotzdem gespeichert; trage die SGTIN bei Bedarf von Hand ein.</div>`;
+      const sg = norm($("eSgtin").value), k = norm($("eKey").value);
+      const dup = findDup(sg, cur.raw, cur.id);
+      if (dup) h += `<div class="msg warn">Achtung: Diese SGTIN ist schon erfasst als „${esc(dup.name || dup.type || "ohne Name")}“ (${esc(dup.room || "ohne Raum")}).</div>`;
+      if (sg && !validSgtin(sg)) h += `<div class="msg warn">Eine SGTIN hat 24 Zeichen (0–9, A–F). Hier sind es ${sg.length}.</div>`;
+      if (k && !validKey(k)) h += `<div class="msg warn">Der Geräteschlüssel hat 32 Zeichen (0–9, A–F). Hier sind es ${k.length}. Er wird so nicht gespeichert.</div>`;
     }
     $("eMsg").innerHTML = h;
   }
 
-  $("eSgtin").addEventListener("input", () => { $("eLast4").value = last4($("eSgtin").value); showDupMsg(); });
-  $("eRaw").addEventListener("input", () => {
-    if (!$("eSgtin").value || $("eSgtin").dataset.auto === "1") { const g = guessSgtin($("eRaw").value); $("eSgtin").value = g; $("eSgtin").dataset.auto = "1"; $("eLast4").value = last4(g); }
-    showDupMsg();
-  });
-  $("eSgtin").addEventListener("change", () => { $("eSgtin").dataset.auto = "0"; });
+  ["eSgtin", "eKey", "eName", "eType", "eRoom", "eLoc"].forEach((id) => $(id).addEventListener("input", () => {
+    if (id === "eSgtin") $("eLast4").value = last4($("eSgtin").value);
+    showMsg(); updateSticker();
+  }));
+  $("eKeyShow").onclick = () => { const k = $("eKey"); const show = k.type === "password"; k.type = show ? "text" : "password"; $("eKeyShow").textContent = show ? "verbergen" : "anzeigen"; };
+  $("eStToggle").onclick = () => { const w = $("eStWrap"); w.hidden = !w.hidden; $("eStToggle").textContent = w.hidden ? "Aufkleber anzeigen" : "Aufkleber verbergen"; updateSticker(); };
+  const stName = () => `qr-code-aufkleber-${last4($("eSgtin").value) || "geraet"}`;
+  const curSvg = () => stickerSvg(draft());
+  $("eStSvg").onclick = () => downloadBlob(stName() + ".svg", new Blob([curSvg()], { type: "image/svg+xml" }));
+  $("eStPng").onclick = async () => { try { downloadBlob(stName() + ".png", await svgToPng(curSvg())); } catch (e) { alert(errText(e)); } };
+  $("eStPrint").onclick = () => printSheet([draft()]);
 
   $("fEdit").addEventListener("submit", async (e) => {
     e.preventDefault();
-    Object.assign(cur, { raw: $("eRaw").value.trim(), sgtin: norm($("eSgtin").value), name: $("eName").value.trim(), type: $("eType").value.trim(),
+    const k = norm($("eKey").value);
+    if (k && !validKey(k)) { alert("Der Geräteschlüssel muss aus genau 32 Zeichen (0–9, A–F) bestehen."); return; }
+    Object.assign(cur, { sgtin: norm($("eSgtin").value), key: k, name: $("eName").value.trim(), type: $("eType").value.trim(),
       room: $("eRoom").value.trim(), loc: $("eLoc").value.trim(), note: $("eNote").value.trim(), fw: $("eFw").value.trim(), updated: new Date().toISOString() });
-    const dup = findDup(cur.raw, cur.sgtin, cur.id);
-    if (dup && !confirm("Dieser Code existiert schon. Trotzdem speichern?")) return;
+    if (k && !cur.fmt) cur.fmt = "EQ01";
+    const dup = findDup(cur.sgtin, cur.raw, cur.id);
+    if (dup && !confirm("Diese SGTIN existiert schon. Trotzdem speichern?")) return;
     try {
       await dbSave(cur);
       devices = await dbAll(); render(); $("dEdit").close(); toast("Gespeichert"); cur = null;
@@ -337,8 +450,6 @@ function init(host) {
     try { await dbDel(cur.id); devices = await dbAll(); render(); $("dEdit").close(); cur = null; toast("Gelöscht"); }
     catch (err) { alert("Löschen fehlgeschlagen: " + errText(err)); }
   };
-  $("ePhotoDel").onclick = () => { if (cur) { cur.photo = ""; cur.thumb = ""; showPhoto(); } };
-  $("ePhotoBtn").onclick = () => { $("filePhoto").dataset.mode = "replace"; $("filePhoto").click(); };
   $("list").addEventListener("click", (e) => {
     const it = e.target.closest(".item"); if (!it) return;
     const d = devices.find((x) => x.id === it.dataset.id); if (d) openEdit({ ...d });
@@ -349,40 +460,36 @@ function init(host) {
   $("bScan").onclick = startScan;
   $("scanClose").onclick = stopScan;
   $("dScan").addEventListener("cancel", stopScan);
-  $("bPhoto").onclick = () => { $("filePhoto").dataset.mode = "new"; $("filePhoto").click(); };
+  $("bPhoto").onclick = () => $("filePhoto").click();
   $("bManual").onclick = () => openEdit(newDev());
   $("filePhoto").addEventListener("change", async (e) => {
-    const f = e.target.files[0]; const mode = e.target.dataset.mode; e.target.value = ""; if (!f) return;
-    try {
-      if (mode === "replace" && cur) { cur.photo = await shrink(f); cur.thumb = await thumbOf(cur.photo); showPhoto(); }
-      else await fromPhoto(f);
-    } catch (err) { alert("Foto konnte nicht verarbeitet werden: " + errText(err)); }
+    const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    try { await fromPhoto(f); } catch (err) { alert("Foto konnte nicht verarbeitet werden: " + errText(err)); }
   });
 
-  /* ---------- Export / Import ---------- */
-  function download(name, text, type) {
-    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name;
-    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  /* ---------- Druck ---------- */
+  function printSheet(list) {
+    const withCode = list.filter((d) => codeContent(d));
+    if (!withCode.length) { toast("Keine QR-Code-Aufkleber zum Drucken vorhanden"); return; }
+    const html = sheetHtml(withCode);
+    const f = document.createElement("iframe");
+    f.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0";
+    f.onload = () => { try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) { downloadBlob("qr-code-aufkleber.html", new Blob([html], { type: "text/html" })); } setTimeout(() => f.remove(), 60000); };
+    f.srcdoc = html; document.body.appendChild(f);
   }
+
+  /* ---------- Export / Import ---------- */
   const stamp = () => new Date().toISOString().slice(0, 10);
   const csvCell = (v) => { v = String(v ?? ""); return /[;"\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
   function exportCsv() {
-    const head = ["Raum", "Einbauort", "Name", "Typ", "Firmware", "SGTIN", "Letzte 4", "Zettel", "Rohinhalt", "Notiz", "Erfasst am"];
+    const head = ["Raum", "Einbauort", "Name", "Typ", "Firmware", "SGTIN", "Letzte 4", "QR-Code-Aufkleber", "Notiz", "Erfasst am"];
     const rows = [...devices].sort((a, b) => (a.room || "~").localeCompare(b.room || "~", "de") || (a.name || "").localeCompare(b.name || "", "de"))
-      .map((d) => [d.room, d.loc, d.name, d.type, d.fw, d.sgtin, last4(d.sgtin), hasLabel(d) ? "ja" : "nein", d.raw, d.note, (d.created || "").slice(0, 10)].map(csvCell).join(";"));
-    download(`hmip-geraete-${stamp()}.csv`, "﻿" + head.join(";") + "\r\n" + rows.join("\r\n"), "text/csv;charset=utf-8");
+      .map((d) => [d.room, d.loc, d.name, d.type, d.fw, d.sgtin, last4(d.sgtin), hasCode(d) ? "ja" : "nein", d.note, (d.created || "").slice(0, 10)].map(csvCell).join(";"));
+    downloadBlob(`hmip-geraete-${stamp()}.csv`, new Blob(["﻿" + head.join(";") + "\r\n" + rows.join("\r\n")], { type: "text/csv;charset=utf-8" }));
   }
-  async function exportJson() {
-    try {
-      toast("Backup wird erstellt …");
-      const out = [];
-      for (const d of devices) {
-        const o = { ...d }; delete o.hasPhoto; delete o.thumb; o.photo = "";
-        if (d.hasPhoto) { try { o.photo = (await ws({ type: "hmip_geraete/photo", device_id: d.id })).photo || ""; } catch (e) { /* ohne Foto */ } }
-        out.push(o);
-      }
-      download(`hmip-backup-${stamp()}.json`, JSON.stringify({ app: "hmip-geraete", version: 1, devices: out }, null, 1), "application/json");
-    } catch (e) { alert("Backup fehlgeschlagen: " + errText(e)); }
+  function exportJson() {
+    const out = devices.map((d) => { const o = {}; FIELDS.forEach((k) => (o[k] = d[k] ?? "")); return o; });
+    downloadBlob(`hmip-backup-${stamp()}.json`, new Blob([JSON.stringify({ app: "hmip-geraete", version: 2, devices: out }, null, 1)], { type: "application/json" }));
   }
   async function importJson(file) {
     try {
@@ -391,9 +498,9 @@ function init(host) {
       let n = 0;
       for (const src of j.devices) {
         if (!src || !/^[A-Za-z0-9_-]{1,40}$/.test(String(src.id || ""))) continue;
-        const d = { ...src };
-        const hasData = typeof d.photo === "string" && d.photo.startsWith("data:image/");
-        if (hasData) d.thumb = await thumbOf(d.photo); else { delete d.photo; d.thumb = d.thumb || ""; }
+        const d = {}; FIELDS.forEach((k) => (d[k] = src[k] ?? ""));
+        if (!validKey(d.key) && d.raw) { const p = parseCode(d.raw); if (p.key) { Object.assign(d, { key: p.key, fmt: p.fmt, raw: "" }); if (!d.sgtin) d.sgtin = p.sgtin; } }
+        if (!d.sgtin && d.raw) d.sgtin = parseCode(d.raw).sgtin;
         await dbSave(d); n++;
       }
       devices = await dbAll(); render(); toast(`${n} Geräte importiert`);
@@ -410,6 +517,7 @@ function init(host) {
     } catch (e) { alert("Übernahme fehlgeschlagen: " + errText(e)); }
     $("mHa").disabled = false;
   };
+  $("mSheet").onclick = () => { $("dMenu").close(); printSheet(filtered()); };
   $("mCsv").onclick = () => { exportCsv(); $("dMenu").close(); };
   $("mJson").onclick = () => { exportJson(); $("dMenu").close(); };
   $("mImport").onclick = () => $("fileImport").click();

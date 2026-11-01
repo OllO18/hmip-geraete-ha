@@ -20,9 +20,9 @@ from homeassistant.loader import async_get_integration
 
 from .const import (
     DOMAIN,
+    FMT_RE,
     ID_PATTERN,
-    MAX_PHOTO_CHARS,
-    MAX_THUMB_CHARS,
+    KEY_RE,
     PANEL_ELEMENT,
     PANEL_URL_PATH,
     SERIAL_RE,
@@ -37,7 +37,7 @@ _STATIC_FLAG = f"{DOMAIN}_static_registered"
 
 
 class DeviceStore:
-    """Geräteliste in .storage; jedes Foto in einer eigenen Datei."""
+    """Geräteliste in .storage/hmip_geraete.devices (enthält die Geräteschlüssel, nur für Admins erreichbar)."""
 
     def __init__(self, hass: HomeAssistant) -> None:
         self.hass = hass
@@ -47,41 +47,37 @@ class DeviceStore:
     async def async_load(self) -> None:
         data = await self._store.async_load()
         self.devices = dict((data or {}).get("devices", {}))
+        # Migration von Version 1.1.x: Fotos und Vorschaubilder gibt es nicht mehr.
+        migrated = False
+        for device_id, record in self.devices.items():
+            if record.pop("thumb", None) is not None:
+                migrated = True
+            if record.pop("hasPhoto", None):
+                await Store(self.hass, STORAGE_VERSION, f"{DOMAIN}.photo_{device_id}").async_remove()
+                migrated = True
+        if migrated:
+            await self._persist()
 
     async def _persist(self) -> None:
         await self._store.async_save({"devices": self.devices})
 
-    def _photo_store(self, device_id: str) -> Store:
-        return Store(self.hass, STORAGE_VERSION, f"{DOMAIN}.photo_{device_id}")
-
     async def async_list(self) -> list[dict[str, Any]]:
         return list(self.devices.values())
 
-    async def async_get_photo(self, device_id: str) -> str:
-        data = await self._photo_store(device_id).async_load()
-        return (data or {}).get("photo", "")
-
-    async def async_save(self, device: dict[str, Any], photo: str | None) -> None:
-        device_id = device["id"]
-        record = {"id": device_id}
+    async def async_save(self, device: dict[str, Any]) -> None:
+        record: dict[str, Any] = {"id": device["id"]}
         for key in TEXT_FIELDS:
             record[key] = str(device.get(key, ""))[:2000]
-        thumb = str(device.get("thumb", ""))
-        record["thumb"] = thumb if len(thumb) <= MAX_THUMB_CHARS else ""
-        existing = self.devices.get(device_id, {})
-        has_photo = bool(existing.get("hasPhoto", False))
-        if photo is not None:
-            if photo == "":
-                await self._photo_store(device_id).async_remove()
-                has_photo = False
-            else:
-                await self._photo_store(device_id).async_save({"photo": photo})
-                has_photo = True
-        record["hasPhoto"] = has_photo
-        if not has_photo:
-            record["thumb"] = ""
-        self.devices[device_id] = record
+        record["sgtin"] = _norm(record["sgtin"])
+        record["key"] = _norm(record["key"]) if KEY_RE.match(_norm(record["key"])) else ""
+        record["fmt"] = record["fmt"].strip().upper() if FMT_RE.match(record["fmt"].strip().upper()) else ""
+        self.devices[device["id"]] = record
         await self._persist()
+
+    async def async_delete(self, device_id: str) -> None:
+        if device_id in self.devices:
+            del self.devices[device_id]
+            await self._persist()
 
     async def async_import_ha(self, ha_devices: list[dict[str, str]]) -> dict[str, int]:
         """Geräte aus Home Assistant übernehmen. Eigene Eingaben bleiben erhalten."""
@@ -95,12 +91,12 @@ class DeviceStore:
                 self.devices[device_id] = {
                     "id": device_id,
                     "raw": "",
+                    "key": "",
+                    "fmt": "",
                     "loc": "",
                     "note": "",
                     "created": now,
                     "updated": now,
-                    "thumb": "",
-                    "hasPhoto": False,
                     **{k: item[k] for k in ("sgtin", "name", "type", "fw", "room")},
                 }
                 added += 1
@@ -118,13 +114,6 @@ class DeviceStore:
                 updated += 1
         await self._persist()
         return {"added": added, "updated": updated}
-
-    async def async_delete(self, device_id: str) -> None:
-        if device_id in self.devices:
-            await self._photo_store(device_id).async_remove()
-            del self.devices[device_id]
-            await self._persist()
-
 
 def _norm(value: Any) -> str:
     return "".join(str(value or "").split()).replace("-", "").upper()
@@ -166,6 +155,7 @@ def _get_store(hass: HomeAssistant, connection, msg) -> DeviceStore | None:
     return store
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/list"})
 @websocket_api.async_response
 async def ws_list(hass, connection, msg):
@@ -174,24 +164,11 @@ async def ws_list(hass, connection, msg):
     connection.send_result(msg["id"], await store.async_list())
 
 
-@websocket_api.websocket_command(
-    {
-        vol.Required("type"): f"{DOMAIN}/photo",
-        vol.Required("device_id"): vol.Match(ID_PATTERN),
-    }
-)
-@websocket_api.async_response
-async def ws_photo(hass, connection, msg):
-    if (store := _get_store(hass, connection, msg)) is None:
-        return
-    connection.send_result(msg["id"], {"photo": await store.async_get_photo(msg["device_id"])})
-
-
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         vol.Required("type"): f"{DOMAIN}/save",
         vol.Required("device"): dict,
-        vol.Optional("photo"): str,
     }
 )
 @websocket_api.async_response
@@ -206,15 +183,11 @@ async def ws_save(hass, connection, msg):
         connection.send_error(msg["id"], "invalid_format", "Ungültige Geräte-ID")
         return
     device["id"] = device_id
-    photo = msg.get("photo")
-    if photo:
-        if not photo.startswith("data:image/") or len(photo) > MAX_PHOTO_CHARS:
-            connection.send_error(msg["id"], "invalid_format", "Ungültiges Foto")
-            return
-    await store.async_save(device, photo)
+    await store.async_save(device)
     connection.send_result(msg["id"], {"ok": True})
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         vol.Required("type"): f"{DOMAIN}/delete",
@@ -229,6 +202,7 @@ async def ws_delete(hass, connection, msg):
     connection.send_result(msg["id"], {"ok": True})
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/import_ha"})
 @websocket_api.async_response
 async def ws_import_ha(hass, connection, msg):
@@ -242,7 +216,7 @@ async def ws_import_ha(hass, connection, msg):
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Websocket-Befehle einmalig registrieren."""
-    for handler in (ws_list, ws_photo, ws_save, ws_delete, ws_import_ha):
+    for handler in (ws_list, ws_save, ws_delete, ws_import_ha):
         websocket_api.async_register_command(hass, handler)
     return True
 
@@ -266,7 +240,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         module_url=f"{STATIC_URL}/panel.js?v={integration.version}",
         sidebar_title="HmIP Geräte",
         sidebar_icon="mdi:barcode-scan",
-        require_admin=False,
+        require_admin=True,
         embed_iframe=False,
         config={},
     )
