@@ -51,3 +51,5 @@ pytest
 Schrift [Mulish](https://github.com/googlefonts/mulish) (SIL Open Font License 1.1, Dateien in `custom_components/hmip_geraete/www/fonts/`, Lizenztext `OFL-Mulish.txt`). Sie ähnelt der Schrift der Homematic-IP-App, ist aber nicht dieselbe.
 
 QR-Codes erzeugt [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) von Kazuhiko Arase (MIT-Lizenz, Datei `custom_components/hmip_geraete/www/qrcode.mjs`). „QR Code“ ist eine eingetragene Marke von DENSO WAVE INCORPORATED.
+
+QR-Erkennung als Ersatz für den eingebauten BarcodeDetector: jsQR (Cosmo Wolfe, Apache-2.0), siehe `www/jsqr.mjs` und `www/LICENSE-jsQR.txt`.

@@ -1,6 +1,7 @@
 /* HmIP Geräteverwaltung – Home-Assistant-Panel (Web Component).
    QR-Codes erzeugt die MIT-lizenzierte Bibliothek qrcode-generator (Kazuhiko Arase), siehe qrcode.mjs. */
 import qrcode from "./qrcode.mjs";
+import jsQR from "./jsqr.mjs";
 
 /* ---------- Code-Format der HmIP-QR-Code-Aufkleber ----------
    Beobachtet: EQ01 + "SG" + SGTIN (24 Hex) + "DLK" + Geräteschlüssel (32 Hex). Alles andere gilt als unbekanntes Format. */
@@ -378,8 +379,8 @@ small{color:var(--mut)}
 
 <dialog id="dMenu"><div class="dlg">
   <h2>Übernahme, Aufkleber, Export</h2>
-  <button class="pri" id="mHa">Geräte aus Home Assistant übernehmen</button>
-  <small>Liest alle eQ-3-Geräte mit Seriennummer aus Home Assistant (Name, Typ, Raum, Firmware). Vorhandene Einträge und deine Eingaben bleiben erhalten.</small>
+  <button class="pri" id="mHa">Geräte aus {{SRC}} übernehmen</button>
+  <small>Liest alle eQ-3-Geräte mit Seriennummer aus {{SRC}} (Name, Typ, Raum, Firmware). Vorhandene Einträge und deine Eingaben bleiben erhalten.</small>
   <button class="pri" id="mDoc">Dokumentationsbogen als PDF (aktuelle Auswahl)</button>
   <small>Nachbau des Homematic-IP-Vordrucks mit Gerätename, Raum und QR-Code-Aufkleber, 6 Geräte je A4-Seite. Auf dem Smartphone teilen oder speichern, dann drucken.</small>
   <button class="ghost" id="mDocPrint">Dokumentationsbogen drucken (PC)</button>
@@ -388,15 +389,19 @@ small{color:var(--mut)}
   <small>Die CSV enthält keine Geräteschlüssel.</small>
   <button class="ghost" id="mJson">Backup (JSON, enthält die Geräteschlüssel)</button>
   <button class="ghost" id="mImport">Backup importieren</button>
-  <small>Die Daten liegen in Home Assistant (.storage) und sind in dessen Backups enthalten. Das Panel ist nur für Administratoren sichtbar. Backups aus früheren Versionen lassen sich importieren (Fotos werden nicht mehr übernommen).</small>
+  <small>{{STORAGE_NOTE}} Backups aus früheren Versionen lassen sich importieren (Fotos werden nicht mehr übernommen).</small>
   <button class="ghost" id="mClose">Schließen</button>
 </div></dialog>
 `;
 
+const DEFAULT_CFG = {
+  source: "Home Assistant",
+  storageNote: "Die Daten liegen in Home Assistant (.storage) und sind in dessen Backups enthalten. Das Panel ist nur für Administratoren sichtbar.",
+};
 const FIELDS = ["id", "raw", "sgtin", "key", "fmt", "name", "type", "room", "loc", "note", "fw", "created", "updated"];
 
 function init(host) {
-  const root = host.shadowRoot;
+  const root = host.shadowRoot, cfg = host.cfg || DEFAULT_CFG;
   const $ = (id) => root.getElementById(id);
   const ws = (m) => host.hass.connection.sendMessagePromise(m);
   let devices = [], cur = null, stream = null, scanning = false, detector = null;
@@ -426,21 +431,39 @@ function init(host) {
   const dbDel = (id) => ws({ type: "hmip_geraete/delete", device_id: id });
 
   /* ---------- Barcode ---------- */
+  /* Erkennung: eingebauter BarcodeDetector (schnell), sonst jsQR (läuft in jedem Browser, nur QR-Codes) */
+  function jsqrDetector() {
+    const cv = document.createElement("canvas"), cx = cv.getContext("2d", { willReadFrequently: true });
+    return {
+      async detect(src) {
+        let w = src.videoWidth || src.naturalWidth || src.width, h = src.videoHeight || src.naturalHeight || src.height;
+        if (!w || !h) return [];
+        const k = Math.min(1, 1280 / Math.max(w, h)); w = Math.round(w * k); h = Math.round(h * k);
+        cv.width = w; cv.height = h; cx.drawImage(src, 0, 0, w, h);
+        const r = jsQR(cx.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: "attemptBoth" });
+        return r ? [{ rawValue: r.data }] : [];
+      },
+    };
+  }
   async function getDetector() {
     if (detector) return detector;
-    if (!("BarcodeDetector" in window)) return null;
-    try {
-      const sup = await BarcodeDetector.getSupportedFormats();
-      const want = ["qr_code", "data_matrix", "code_128", "code_39", "ean_13", "ean_8", "itf", "pdf417", "aztec"];
-      detector = new BarcodeDetector({ formats: want.filter((f) => sup.includes(f)) });
-    } catch (e) { detector = new BarcodeDetector(); }
+    if ("BarcodeDetector" in window) {
+      try {
+        const sup = await BarcodeDetector.getSupportedFormats();
+        if (sup.includes("qr_code")) {
+          const want = ["qr_code", "data_matrix", "code_128", "code_39", "ean_13", "ean_8", "itf", "pdf417", "aztec"];
+          detector = new BarcodeDetector({ formats: want.filter((f) => sup.includes(f)) });
+          return detector;
+        }
+      } catch (e) { /* weiter mit jsQR */ }
+    }
+    detector = jsqrDetector();
     return detector;
   }
 
   async function startScan() {
     const det = await getDetector();
     $("dScan").showModal();
-    if (!det) { $("scanMsg").textContent = "Dieser Browser kann keine Barcodes erkennen. Nimm „Foto“ oder „Manuell“ (Chrome auf Android funktioniert)."; return; }
     if (!navigator.mediaDevices?.getUserMedia) { $("scanMsg").textContent = "Kein Kamerazugriff (HTTPS nötig). Nimm „Foto“ oder „Manuell“."; return; }
     try {
       stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 } }, audio: false });
@@ -480,7 +503,7 @@ function init(host) {
     if (!file) return;
     const det = await getDetector();
     let raw = "";
-    if (det) { try { const bmp = await createImageBitmap(file); const r = await det.detect(bmp); if (r.length) raw = r[0].rawValue; } catch (e) { /* kein Code */ } }
+    if (det) { try { const bmp = await createImageBitmap(file); /* jsQR braucht ein Bild mit Breite/Höhe */ const r = await det.detect(bmp); if (r.length) raw = r[0].rawValue; } catch (e) { /* kein Code */ } }
     if (!raw) { openEdit(newDev(), det ? "Im Foto wurde kein QR-Code erkannt. SGTIN und Schlüssel bitte von Hand eintragen." : "Dieser Browser erkennt keine Codes im Foto. SGTIN und Schlüssel bitte von Hand eintragen."); return; }
     openFromScan(raw);
   }
@@ -541,7 +564,7 @@ function init(host) {
           <div><span class="pill ${ok ? "ok" : "miss"}">${ok ? "QR-Code-Aufkleber erfasst" : "QR-Code-Aufkleber fehlt"}</span>${d.room ? `<span class="pill room">${esc(d.room)}</span>` : ""}${d.loc ? `<span class="s">${esc(d.loc)}</span>` : ""}</div>
         </div><span class="chev">›</span></div>`;
     }).join("") :
-      `<div class="empty">${devices.length ? "Keine Treffer." : "Noch keine Geräte.<br>Öffne das Menü (⋯) und übernimm die Geräte aus Home Assistant, oder tippe auf „Scannen“."}</div>`;
+      `<div class="empty">${devices.length ? "Keine Treffer." : "Noch keine Geräte.<br>Öffne das Menü (⋯) und übernimm die Geräte aus " + cfg.source + ", oder tippe auf „Scannen“."}</div>`;
   }
 
   function draft() {
@@ -688,7 +711,7 @@ function init(host) {
     try {
       const r = await ws({ type: "hmip_geraete/import_ha" });
       devices = await dbAll(); render(); $("dMenu").close();
-      toast(`Aus Home Assistant: ${r.added} neu, ${r.updated} aktualisiert` + (r.skipped ? `, ${r.skipped} ohne passende Seriennummer übersprungen` : ""));
+      toast(`Aus ${cfg.source}: ${r.added} neu, ${r.updated} aktualisiert` + (r.skipped ? `, ${r.skipped} ohne passende Seriennummer übersprungen` : ""));
     } catch (e) { alert("Übernahme fehlgeschlagen: " + errText(e)); }
     $("mHa").disabled = false;
   };
@@ -709,7 +732,7 @@ class HmipGeraetePanel extends HTMLElement {
   constructor() { super(); this.attachShadow({ mode: "open" }); this._ready = false; this._narrow = false; }
   set hass(h) {
     this._hass = h;
-    if (!this._ready) { this._ready = true; this.shadowRoot.innerHTML = TEMPLATE; this._applyNarrow(); init(this); }
+    if (!this._ready) { this._ready = true; const c = this.cfg || DEFAULT_CFG; this.shadowRoot.innerHTML = TEMPLATE.replaceAll("{{SRC}}", c.source).replaceAll("{{STORAGE_NOTE}}", c.storageNote); this._applyNarrow(); init(this); }
   }
   get hass() { return this._hass; }
   set narrow(v) { this._narrow = !!v; this._applyNarrow(); }

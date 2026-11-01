@@ -1,5 +1,8 @@
 # Änderungsprotokoll
 
+## 1.5.1
+- Scannen funktioniert jetzt auch in Browsern ohne eingebaute Barcode-Erkennung (z. B. Firefox, Safari): QR-Codes werden dann mit der Bibliothek jsQR (Apache-2.0) gelesen, live und per Foto.
+
 ## 1.5.0
 - Neu: Dokumentationsbogen nach dem Vorbild des Homematic-IP-Vordrucks (A4, 6 Geräte je Seite) mit Gerätename, Raum/Montageort, Sonstiges und dem QR-Code-Aufkleber. Als PDF erzeugbar (Smartphone: teilen/speichern, dann drucken) oder direkt am PC drucken.
 - Der Aufkleber enthält Name und Einbauort nicht mehr (sie stehen auf dem Bogen). Aufkleber-Bogen ebenfalls als PDF.
