@@ -1,5 +1,8 @@
 # Änderungsprotokoll
 
+## 1.7.2
+- Meldung nach dem Übernehmen nennt nur noch neue und aktualisierte Geräte (der Hinweis auf übersprungene Geräte ohne SGTIN entfällt).
+
 ## 1.7.1
 - Aufkleber ohne Key: Der QR-Code hat jetzt das Format `EQ01SG<SGTIN>` (wie das Original, ohne Key-Teil). Diese Schreibweise erkennt die Homematic-IP-App beim Anlernen; die SGTIN allein lehnt sie ab (getestet am 01.11.2026).
 
