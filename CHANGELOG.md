@@ -1,5 +1,9 @@
 # Änderungsprotokoll
 
+## 1.10.0
+- Filter nach Kategorien wie auf homematic-ip.com (Access Points & Zentralen, Heizen & Raumklima, Licht, Beschattung, Sicherheit & Alarm, Wetter & Umwelt, Zutritt, Energiemanagement). Zuordnung aus dem Produktfilter der Homepage (ausgelesen am 02.11.2026); ein Gerät kann in mehreren Kategorien stehen, nicht zuordenbare Geräte unter „(ohne Kategorie)“.
+- Bezeichnungen ergänzt: HmIP-WRC6-230 „Wandtaster – 6-fach, 230 V“; HmIP-BWTH jetzt „…, 230 V“ wie auf der Homepage.
+
 ## 1.9.0
 - Gerätetypen mit deutscher Produktbezeichnung statt nur Kürzel: im Filter (alphabetisch, Kürzel klein darunter, Varianten wie „HmIP-PS-2 9YM“ zusammengefasst), in der Liste, in der Notizzeile und im Feld „Sonstiges“ des Bogens. Die Suche findet auch die Bezeichnung. Bezeichnungen stammen aus eQ-3-Unterlagen bzw. den Standardnamen der HCU; nicht belegte Kürzel bleiben als Kürzel stehen.
 
