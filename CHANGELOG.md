@@ -1,5 +1,10 @@
 # Änderungsprotokoll
 
+## 1.12.0
+- Ausdrucke mit Vorlagen: nach Räumen, nach Funktion (erste Kategorie laut homematic-ip.com), alphabetisch oder nach aktuellem Filter. Jeder Bogen beginnt auf einer neuen Seite und trägt Bogenname, Stand und Seitenzahl; einzelne Bögen lassen sich gezielt neu drucken und austauschen. Je Bogen werden Geräteanzahl, Seiten und letzte Änderung angezeigt.
+- Anleitung im Menü.
+- Versionsnummer im Menü und in der Anleitung.
+
 ## 1.11.0
 - Automatischer Abgleich mit Home Assistant beim Öffnen der Seite: neue Geräte werden angelegt, die Firmware nachgeführt.
 - Änderungen in Home Assistant (Name, Raum) werden als „In Home Assistant geändert“ markiert; im Gerät lassen sie sich einzeln übernehmen oder beibehalten, über der Liste alle auf einmal übernehmen.
