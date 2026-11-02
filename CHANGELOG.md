@@ -1,5 +1,11 @@
 # Änderungsprotokoll
 
+## 1.11.0
+- Automatischer Abgleich mit Home Assistant beim Öffnen der Seite: neue Geräte werden angelegt, die Firmware nachgeführt.
+- Änderungen in Home Assistant (Name, Raum) werden als „In Home Assistant geändert“ markiert; im Gerät lassen sie sich einzeln übernehmen oder beibehalten, über der Liste alle auf einmal übernehmen.
+- Geräte, die es in Home Assistant nicht mehr gibt, werden als „Nicht mehr in Home Assistant“ markiert (nicht gelöscht).
+- Neue Filter: „In Home Assistant geändert“ und „Nicht mehr in Home Assistant“.
+
 ## 1.10.0
 - Filter nach Kategorien wie auf homematic-ip.com (Access Points & Zentralen, Heizen & Raumklima, Licht, Beschattung, Sicherheit & Alarm, Wetter & Umwelt, Zutritt, Energiemanagement). Zuordnung aus dem Produktfilter der Homepage (ausgelesen am 02.11.2026); ein Gerät kann in mehreren Kategorien stehen, nicht zuordenbare Geräte unter „(ohne Kategorie)“.
 - Bezeichnungen ergänzt: HmIP-WRC6-230 „Wandtaster – 6-fach, 230 V“; HmIP-BWTH jetzt „…, 230 V“ wie auf der Homepage.

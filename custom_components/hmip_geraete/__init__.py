@@ -85,11 +85,20 @@ class DeviceStore:
             await self._persist()
 
     async def async_import_ha(self, ha_devices: list[dict[str, str]]) -> dict[str, int]:
-        """Geräte aus Home Assistant übernehmen. Eigene Eingaben bleiben erhalten."""
+        """Geräte aus Home Assistant übernehmen. Eigene Eingaben bleiben erhalten.
+
+        Neue Geräte werden angelegt, die Firmware wird aktualisiert, leere Felder werden ergänzt.
+        Den aktuellen Stand der Quelle (Name, Raum, Typ) merkt sich der Eintrag in src_*; weicht er von den
+        eigenen Werten ab, zeigt das Panel eine Änderung an. Geräte, die es in der Quelle nicht mehr gibt,
+        werden mit missing="1" markiert (nicht gelöscht).
+        """
         by_sgtin = {_norm(d.get("sgtin")): d for d in self.devices.values() if d.get("sgtin")}
         now = datetime.now(timezone.utc).isoformat()
-        added = updated = 0
+        added = updated = removed = 0
+        present: set[str] = set()
         for item in ha_devices:
+            present.add(item["sgtin"])
+            src = {"src_name": item["name"], "src_room": item["room"], "src_type": item["type"], "missing": ""}
             existing = by_sgtin.get(item["sgtin"])
             if existing is None:
                 device_id = "ha" + item["sgtin"]
@@ -102,7 +111,10 @@ class DeviceStore:
                     "note": "",
                     "created": now,
                     "updated": now,
+                    "ack_name": "",
+                    "ack_room": "",
                     **{k: item[k] for k in ("sgtin", "name", "type", "fw", "room")},
+                    **src,
                 }
                 added += 1
                 continue
@@ -114,11 +126,27 @@ class DeviceStore:
             if item["fw"] and existing.get("fw") != item["fw"]:
                 existing["fw"] = item["fw"]
                 changed = True
+            existing.update(src)
             if changed:
                 existing["updated"] = now
                 updated += 1
+        for dev in self.devices.values():
+            known = dev.get("src_name") or dev.get("src_type") or str(dev.get("id", "")).startswith("ha")
+            if dev.get("sgtin") and _norm(dev["sgtin"]) not in present and known and dev.get("missing") != "1":
+                dev["missing"] = "1"
+                removed += 1
         await self._persist()
-        return {"added": added, "updated": updated}
+        changes = sum(1 for d in self.devices.values() if _pending(d))
+        return {"added": added, "updated": updated, "removed": removed, "changes": changes}
+
+
+def _pending(dev: dict[str, Any]) -> bool:
+    """Name oder Raum weicht in der Quelle ab und wurde noch nicht bestätigt."""
+    for key in ("name", "room"):
+        src = dev.get(f"src_{key}") or ""
+        if src and src != (dev.get(key) or "") and src != (dev.get(f"ack_{key}") or ""):
+            return True
+    return False
 
 def _norm(value: Any) -> str:
     return "".join(str(value or "").split()).replace("-", "").upper()

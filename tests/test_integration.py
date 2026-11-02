@@ -141,7 +141,7 @@ async def test_import_from_ha_registry(hass, hass_ws_client):
 
     r = await call(type="hmip_geraete/import_ha")
     assert r["success"], r
-    assert r["result"] == {"added": 2, "updated": 1, "total": 3, "skipped": 1}
+    assert r["result"] == {"added": 2, "updated": 1, "removed": 0, "changes": 0, "total": 3, "skipped": 1}
     devs = {d["sgtin"]: d for d in (await call(type="hmip_geraete/list"))["result"]}
     assert len(devs) == 3
     assert devs[s3]["id"] == "manuell1" and devs[s3]["name"] == "Bewegungsmelder" and devs[s3]["key"] == KEY and devs[s3]["type"] == "HmIP-SMO230-A"
@@ -157,3 +157,20 @@ async def test_import_from_ha_registry(hass, hass_ws_client):
     devs = {x["sgtin"]: x for x in (await call(type="hmip_geraete/list"))["result"]}
     assert len(devs) == 3
     assert devs[s1]["name"] == "Mein Name" and devs[s1]["loc"] == "links oben" and devs[s1]["key"] == KEY and devs[s1]["fw"] == "1.19.0"
+    # Abweichung zur Quelle wird gemeldet, bis sie bestätigt ist
+    assert r["result"]["changes"] == 1 and devs[s1]["src_name"] == "Fensterkontakt KZ2"
+    assert (await call(type="hmip_geraete/save", device={**devs[s1], "ack_name": "Fensterkontakt KZ2"}))["success"]
+    r = await call(type="hmip_geraete/import_ha")
+    assert r["result"]["changes"] == 0
+    # In der Quelle umbenannt: wieder als Änderung gemeldet
+    reg.async_update_device(d1.id, name_by_user="Fenster Kinderzimmer")
+    r = await call(type="hmip_geraete/import_ha")
+    assert r["result"]["changes"] == 1
+    # Gerät verschwindet aus der Quelle: markiert, nicht gelöscht
+    reg.async_remove_device(next(x.id for x in reg.devices.values() if x.serial_number == s2))
+    r = await call(type="hmip_geraete/import_ha")
+    assert r["result"]["removed"] == 1
+    devs = {x["sgtin"]: x for x in (await call(type="hmip_geraete/list"))["result"]}
+    assert len(devs) == 3 and devs[s2]["missing"] == "1" and devs[s1]["missing"] == ""
+    r = await call(type="hmip_geraete/import_ha")
+    assert r["result"]["removed"] == 0  # nur neu fehlende zählen
