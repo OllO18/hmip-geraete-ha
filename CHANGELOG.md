@@ -1,5 +1,8 @@
 # Änderungsprotokoll
 
+## 1.9.0
+- Gerätetypen mit deutscher Produktbezeichnung statt nur Kürzel: im Filter (alphabetisch, Kürzel klein darunter, Varianten wie „HmIP-PS-2 9YM“ zusammengefasst), in der Liste, in der Notizzeile und im Feld „Sonstiges“ des Bogens. Die Suche findet auch die Bezeichnung. Bezeichnungen stammen aus eQ-3-Unterlagen bzw. den Standardnamen der HCU; nicht belegte Kürzel bleiben als Kürzel stehen.
+
 ## 1.8.0
 - Erklärung „Original-Code und Online-Code“ oben in der Liste (ein- und ausklappbar): wofür der Key gebraucht wird (Offline-Anlernen an der HCU) und wofür der Online-Code reicht (normales Anlernen mit Internet), mit Verweis auf das Anwenderhandbuch.
 
