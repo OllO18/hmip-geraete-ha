@@ -1,5 +1,8 @@
 # Änderungsprotokoll
 
+## 1.8.0
+- Erklärung „Original-Code und Online-Code“ oben in der Liste (ein- und ausklappbar): wofür der Key gebraucht wird (Offline-Anlernen an der HCU) und wofür der Online-Code reicht (normales Anlernen mit Internet), mit Verweis auf das Anwenderhandbuch.
+
 ## 1.7.2
 - Meldung nach dem Übernehmen nennt nur noch neue und aktualisierte Geräte (der Hinweis auf übersprungene Geräte ohne SGTIN entfällt).
 
