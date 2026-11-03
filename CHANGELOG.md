@@ -1,5 +1,8 @@
 # Änderungsprotokoll
 
+## 1.12.2
+- Vorlage „Nach Funktion“: Geräte innerhalb eines Bogens nach Gerät (Bezeichnung) sortiert, dann nach Name – nicht mehr nach Raum.
+
 ## 1.12.1
 - Vorlage „Nach Funktion“: Geräte erscheinen in allen ihren Kategorien (wie auf homematic-ip.com), nicht nur in der ersten.
 
