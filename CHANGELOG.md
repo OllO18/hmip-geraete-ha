@@ -1,5 +1,8 @@
 # Änderungsprotokoll
 
+## 1.13.0
+- Eigene Bögen: freie Dokumentationsbögen zusammenstellen – Geräte einzeln oder mehrere auf einmal in Felder setzen, Felder leeren (bleiben beim Druck frei), einfügen, entfernen und verschieben, am PC auch per Ziehen tauschen. Druck über „Ausdrucke erstellen“ → „Eigene Bögen“, jede Seite einzeln wählbar. Die Bögen werden in Home Assistant gespeichert und zeigen beim Druck immer den aktuellen Stand der Geräte.
+
 ## 1.12.2
 - Vorlage „Nach Funktion“: Geräte innerhalb eines Bogens nach Gerät (Bezeichnung) sortiert, dann nach Name – nicht mehr nach Raum.
 

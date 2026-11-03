@@ -174,3 +174,22 @@ async def test_import_from_ha_registry(hass, hass_ws_client):
     assert len(devs) == 3 and devs[s2]["missing"] == "1" and devs[s1]["missing"] == ""
     r = await call(type="hmip_geraete/import_ha")
     assert r["result"]["removed"] == 0  # nur neu fehlende zählen
+
+
+async def test_layouts(hass, hass_ws_client):
+    entry = await _setup(hass)
+    call = Caller(await hass_ws_client(hass))
+    assert (await call(type="hmip_geraete/layouts"))["result"] == []
+    r = await call(type="hmip_geraete/layout_save", layout={"id": "b1", "name": "Sicherungskasten", "slots": ["d1", "", None, "../x", "d2"]})
+    assert r["success"], r
+    lay = (await call(type="hmip_geraete/layouts"))["result"]
+    assert len(lay) == 1 and lay[0]["slots"] == ["d1", "", "", "", "d2"] and lay[0]["name"] == "Sicherungskasten"
+    assert not (await call(type="hmip_geraete/layout_save", layout={"id": "../b", "slots": []}))["success"]
+    assert not (await call(type="hmip_geraete/layout_save", layout={"id": "b2", "slots": [""] * 601}))["success"]
+    # bleibt über einen Neustart erhalten
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert len((await call(type="hmip_geraete/layouts"))["result"]) == 1
+    assert (await call(type="hmip_geraete/layout_delete", layout_id="b1"))["success"]
+    assert (await call(type="hmip_geraete/layouts"))["result"] == []

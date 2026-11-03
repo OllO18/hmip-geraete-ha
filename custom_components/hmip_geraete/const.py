@@ -17,3 +17,4 @@ TEXT_FIELDS = (
 SERIAL_RE = re.compile(r"^[0-9A-F]{24}$")
 KEY_RE = re.compile(r"^[0-9A-F]{32}$")
 FMT_RE = re.compile(r"^[A-Z0-9]{2,8}$")
+MAX_SLOTS = 600  # höchstens 100 Seiten je eigenem Bogen

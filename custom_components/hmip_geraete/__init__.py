@@ -23,6 +23,8 @@ from .const import (
     DOMAIN,
     FMT_RE,
     ID_PATTERN,
+    ID_RE,
+    MAX_SLOTS,
     KEY_RE,
     PANEL_ELEMENT,
     PANEL_URL_PATH,
@@ -48,10 +50,13 @@ class DeviceStore:
         self.hass = hass
         self._store: Store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self.devices: dict[str, dict[str, Any]] = {}
+        # Eigene Bögen: {id: {"id", "name", "slots": [Geräte-ID oder ""], "updated"}}
+        self.layouts: dict[str, dict[str, Any]] = {}
 
     async def async_load(self) -> None:
         data = await self._store.async_load()
         self.devices = dict((data or {}).get("devices", {}))
+        self.layouts = dict((data or {}).get("layouts", {}))
         # Migration von Version 1.1.x: Fotos und Vorschaubilder gibt es nicht mehr.
         migrated = False
         for device_id, record in self.devices.items():
@@ -64,7 +69,7 @@ class DeviceStore:
             await self._persist()
 
     async def _persist(self) -> None:
-        await self._store.async_save({"devices": self.devices})
+        await self._store.async_save({"devices": self.devices, "layouts": self.layouts})
 
     async def async_list(self) -> list[dict[str, Any]]:
         return list(self.devices.values())
@@ -78,6 +83,23 @@ class DeviceStore:
         record["fmt"] = record["fmt"].strip().upper() if FMT_RE.match(record["fmt"].strip().upper()) else ""
         self.devices[device["id"]] = record
         await self._persist()
+
+    async def async_save_layout(self, layout: dict[str, Any]) -> None:
+        slots = layout.get("slots") or []
+        if not isinstance(slots, list) or len(slots) > MAX_SLOTS:
+            raise vol.Invalid("Zu viele Felder")
+        clean = [str(x) if x and ID_RE.match(str(x)) else "" for x in slots]
+        self.layouts[layout["id"]] = {
+            "id": layout["id"],
+            "name": str(layout.get("name", ""))[:100] or "Eigener Bogen",
+            "slots": clean,
+            "updated": datetime.now(timezone.utc).isoformat(),
+        }
+        await self._persist()
+
+    async def async_delete_layout(self, layout_id: str) -> None:
+        if self.layouts.pop(layout_id, None) is not None:
+            await self._persist()
 
     async def async_delete(self, device_id: str) -> None:
         if device_id in self.devices:
@@ -247,9 +269,46 @@ async def ws_import_ha(hass, connection, msg):
     connection.send_result(msg["id"], result)
 
 
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/layouts"})
+@websocket_api.async_response
+async def ws_layouts(hass, connection, msg):
+    if (store := _get_store(hass, connection, msg)) is None:
+        return
+    connection.send_result(msg["id"], list(store.layouts.values()))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/layout_save", vol.Required("layout"): dict})
+@websocket_api.async_response
+async def ws_layout_save(hass, connection, msg):
+    if (store := _get_store(hass, connection, msg)) is None:
+        return
+    layout = msg["layout"]
+    if not ID_RE.match(str(layout.get("id", ""))):
+        connection.send_error(msg["id"], "invalid_format", "Ungültige Bogen-ID")
+        return
+    try:
+        await store.async_save_layout(layout)
+    except vol.Invalid as err:
+        connection.send_error(msg["id"], "invalid_format", str(err))
+        return
+    connection.send_result(msg["id"], {"ok": True})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/layout_delete", vol.Required("layout_id"): vol.Match(ID_PATTERN)})
+@websocket_api.async_response
+async def ws_layout_delete(hass, connection, msg):
+    if (store := _get_store(hass, connection, msg)) is None:
+        return
+    await store.async_delete_layout(msg["layout_id"])
+    connection.send_result(msg["id"], {"ok": True})
+
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Websocket-Befehle einmalig registrieren."""
-    for handler in (ws_list, ws_save, ws_delete, ws_import_ha):
+    for handler in (ws_list, ws_save, ws_delete, ws_import_ha, ws_layouts, ws_layout_save, ws_layout_delete):
         websocket_api.async_register_command(hass, handler)
     return True
 
