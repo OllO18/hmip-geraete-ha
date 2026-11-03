@@ -1,5 +1,8 @@
 # Änderungsprotokoll
 
+## 1.15.1
+- Eigene Bögen: Geräte lassen sich beim Einsetzen jetzt auch nach Geräteart auswählen (zusätzlich zu Raum und Suche); beim Einfügen mehrerer Geräte gibt es „Alle markieren“.
+
 ## 1.15.0
 - Gerätearten statt der Kategorien von homematic-ip.com: jedes Gerät gehört genau zu einer Art (z. B. Heizkörperthermostate, Fenster- & Türkontakte, Schlösser, Tore & Zutritt). Gilt für Gliederung der Liste, Filter und Druckvorlage.
 - Rund 250 Homematic-IP-Modelle mit deutscher Bezeichnung hinterlegt (Quelle: Gerätedatenbank der CCU-Software OCCU von eQ-3, Stand 16.09.2026, und homematic-ip.com).
