@@ -1,5 +1,13 @@
 # Änderungsprotokoll
 
+## 1.14.0
+- Neue, einfachere Oberfläche mit drei Bereichen unten: **Geräte**, **Drucken**, **Mehr**. Das bisherige Menü entfällt.
+- Fortschrittsanzeige „Original-Codes: X von N gescannt“ statt vier Kacheln; antippen zeigt die fehlenden Geräte, „?“ erklärt Original- und Online-Code.
+- Gliederung der Liste wählbar: nach Raum, nach Funktion, nach Gerätetyp oder A–Z ohne Gruppen. Gruppen lassen sich auf- und zuklappen; die Wahl wird gemerkt.
+- Gerät bearbeiten übersichtlicher: Aufkleber-Status oben, technische Angaben eingeklappt.
+- Im Scan-Fenster direkt „Stattdessen Foto wählen“.
+- Handauswahl entfernt (Druck nach aktuellem Filter oder über eigene Bögen).
+
 ## 1.13.0
 - Eigene Bögen: freie Dokumentationsbögen zusammenstellen – Geräte einzeln oder mehrere auf einmal in Felder setzen, Felder leeren (bleiben beim Druck frei), einfügen, entfernen und verschieben, am PC auch per Ziehen tauschen. Druck über „Ausdrucke erstellen“ → „Eigene Bögen“, jede Seite einzeln wählbar. Die Bögen werden in Home Assistant gespeichert und zeigen beim Druck immer den aktuellen Stand der Geräte.
 
