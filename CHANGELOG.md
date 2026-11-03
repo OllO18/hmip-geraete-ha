@@ -1,5 +1,10 @@
 # Änderungsprotokoll
 
+## 1.15.0
+- Gerätearten statt der Kategorien von homematic-ip.com: jedes Gerät gehört genau zu einer Art (z. B. Heizkörperthermostate, Fenster- & Türkontakte, Schlösser, Tore & Zutritt). Gilt für Gliederung der Liste, Filter und Druckvorlage.
+- Rund 250 Homematic-IP-Modelle mit deutscher Bezeichnung hinterlegt (Quelle: Gerätedatenbank der CCU-Software OCCU von eQ-3, Stand 16.09.2026, und homematic-ip.com).
+- Filter und Gliederung nach Gerätetyp (Modell) entfernt – die Suche findet auch Modellkürzel.
+
 ## 1.14.0
 - Neue, einfachere Oberfläche mit drei Bereichen unten: **Geräte**, **Drucken**, **Mehr**. Das bisherige Menü entfällt.
 - Fortschrittsanzeige „Original-Codes: X von N gescannt“ statt vier Kacheln; antippen zeigt die fehlenden Geräte, „?“ erklärt Original- und Online-Code.
