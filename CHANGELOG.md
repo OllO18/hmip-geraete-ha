@@ -1,5 +1,8 @@
 # Änderungsprotokoll
 
+## 1.12.1
+- Vorlage „Nach Funktion“: Geräte erscheinen in allen ihren Kategorien (wie auf homematic-ip.com), nicht nur in der ersten.
+
 ## 1.12.0
 - Ausdrucke mit Vorlagen: nach Räumen, nach Funktion (erste Kategorie laut homematic-ip.com), alphabetisch oder nach aktuellem Filter. Jeder Bogen beginnt auf einer neuen Seite und trägt Bogenname, Stand und Seitenzahl; einzelne Bögen lassen sich gezielt neu drucken und austauschen. Je Bogen werden Geräteanzahl, Seiten und letzte Änderung angezeigt.
 - Anleitung im Menü.
