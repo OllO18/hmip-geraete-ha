@@ -1,4 +1,4 @@
-# HmIP Geräteverwaltung für Home Assistant
+# HmIP Gerätedokumentation für Home Assistant
 
 Seitenleisten-Panel zum Erfassen und Verwalten von Homematic-IP-Geräten: **QR-Code-Aufkleber** der Geräte scannen, Raum, Einbauort, Name und Typ ergänzen, als CSV für Excel exportieren und bei Bedarf **neue QR-Code-Aufkleber ausdrucken**.
 
@@ -26,8 +26,8 @@ Der QR-Code eines Aufklebers enthält neben der SGTIN den **Geräteschlüssel** 
 
 1. HACS öffnen, oben rechts Menü, **Benutzerdefinierte Repositories**.
 2. URL dieses Repositorys eintragen, Kategorie **Integration**, hinzufügen.
-3. „HmIP Geräteverwaltung“ herunterladen und Home Assistant neu starten.
-4. **Einstellungen, Geräte & Dienste, Integration hinzufügen**: „HmIP Geräteverwaltung“ wählen.
+3. „HmIP Gerätedokumentation“ herunterladen und Home Assistant neu starten.
+4. **Einstellungen, Geräte & Dienste, Integration hinzufügen**: „HmIP Gerätedokumentation“ wählen.
 5. Der Eintrag **HmIP Geräte** erscheint in der Seitenleiste (nur für Administratoren).
 
 Manuell: Ordner `custom_components/hmip_geraete` nach `/config/custom_components/` kopieren, neu starten, ab Schritt 4.

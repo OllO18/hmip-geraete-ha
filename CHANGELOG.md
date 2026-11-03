@@ -1,5 +1,8 @@
 # Änderungsprotokoll
 
+## 1.15.2
+- Umbenannt in „HmIP Gerätedokumentation“ (vorher „HmIP Geräteverwaltung“). Technischer Name `hmip_geraete` und gespeicherte Daten bleiben unverändert.
+
 ## 1.15.1
 - Eigene Bögen: Geräte lassen sich beim Einsetzen jetzt auch nach Geräteart auswählen (zusätzlich zu Raum und Suche); beim Einfügen mehrerer Geräte gibt es „Alle markieren“.
 

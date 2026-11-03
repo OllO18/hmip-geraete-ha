@@ -2,12 +2,12 @@
   "config": {
     "step": {
       "user": {
-        "title": "HmIP Geräteverwaltung",
+        "title": "HmIP Gerätedokumentation",
         "description": "Fügt der Seitenleiste das Panel „HmIP Geräte“ hinzu. Barcodezettel scannen und Geräte verwalten. Die Daten werden in Home Assistant gespeichert."
       }
     },
     "abort": {
-      "single_instance_allowed": "Die HmIP Geräteverwaltung ist bereits eingerichtet."
+      "single_instance_allowed": "Die HmIP Gerätedokumentation ist bereits eingerichtet."
     }
   }
 }

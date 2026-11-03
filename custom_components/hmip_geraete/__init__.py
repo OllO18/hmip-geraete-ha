@@ -1,4 +1,4 @@
-"""HmIP Geräteverwaltung: Seitenleisten-Panel zum Erfassen von Homematic-IP-Geräten."""
+"""HmIP Gerätedokumentation: Seitenleisten-Panel zum Erfassen von Homematic-IP-Geräten."""
 from __future__ import annotations
 
 import hashlib
@@ -206,7 +206,7 @@ def collect_ha_devices(hass: HomeAssistant) -> tuple[list[dict[str, str]], int]:
 def _get_store(hass: HomeAssistant, connection, msg) -> DeviceStore | None:
     store = hass.data.get(DOMAIN)
     if store is None:
-        connection.send_error(msg["id"], "not_ready", "HmIP Geräteverwaltung ist nicht eingerichtet")
+        connection.send_error(msg["id"], "not_ready", "HmIP Gerätedokumentation ist nicht eingerichtet")
     return store
 
 

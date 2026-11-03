@@ -1,4 +1,4 @@
-"""Konstanten der HmIP Geräteverwaltung."""
+"""Konstanten der HmIP Gerätedokumentation."""
 import re
 
 DOMAIN = "hmip_geraete"

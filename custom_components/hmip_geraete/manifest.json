@@ -1,11 +1,11 @@
 {
   "domain": "hmip_geraete",
-  "name": "HmIP Geräteverwaltung",
+  "name": "HmIP Gerätedokumentation",
   "codeowners": [],
   "config_flow": true,
   "dependencies": ["frontend", "http", "websocket_api", "panel_custom"],
   "documentation": "https://github.com/OllO18/hmip-geraete-ha",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/OllO18/hmip-geraete-ha/issues",
-  "version": "1.15.1"
+  "version": "1.15.2"
 }
